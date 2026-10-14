@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: manipulation;
+  }
+}
+
+.pixel-font {
+  font-family: 'DotGothic16', 'Press Start 2P', monospace, sans-serif;
+  font-smooth: never;
+  -webkit-font-smoothing: none;
+}
+
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* 纯正汉代黑漆嵌金古风三国窗口 (Three Kingdoms Antique Lacquer & Bronze) */
+.gba-box {
+  background: #17120e;
+  border: 3px solid #b45309;
+  box-shadow: inset 0 0 0 1px #451a03, 0 4px 12px rgba(0, 0, 0, 0.8);
+}
+
+.gba-window {
+  background: linear-gradient(180deg, #1f1612 0%, #100b08 100%);
+  border: 2px solid #ca8a04;
+  box-shadow: inset 0 0 0 1px #7f1d1d, 0 4px 10px rgba(0, 0, 0, 0.7);
+}
+
+/* 汉室玉圭与青铜印章按键 */
+.gba-btn {
+  background: linear-gradient(180deg, #854d0e 0%, #451a03 100%);
+  border: 2px solid #eab308;
+  box-shadow: inset 0 1px 0 rgba(254, 240, 138, 0.3), 0 3px 6px rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.12s ease-in-out;
+}
+
+.gba-btn:hover {
+  background: linear-gradient(180deg, #a16207 0%, #713f12 100%);
+  border-color: #fef08a;
+  transform: translateY(-1px);
+}
+
+.gba-btn:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* 朱砂战阵按键 (攻坚/致命) */
+.gba-btn-crimson {
+  background: linear-gradient(180deg, #991b1b 0%, #450a0a 100%);
+  border: 2px solid #f87171;
+  box-shadow: inset 0 1px 0 rgba(254, 202, 202, 0.3), 0 3px 6px rgba(0, 0, 0, 0.7);
+}
+
+.gba-btn-crimson:hover {
+  background: linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%);
+  border-color: #fca5a5;
+}
+
+/* 蜀锦碧玉按键 (生息/整备) */
+.gba-btn-jade {
+  background: linear-gradient(180deg, #166534 0%, #052e16 100%);
+  border: 2px solid #4ade80;
+  box-shadow: inset 0 1px 0 rgba(187, 247, 208, 0.3), 0 3px 6px rgba(0, 0, 0, 0.7);
+}
+
+.gba-btn-jade:hover {
+  background: linear-gradient(180deg, #15803d 0%, #14532d 100%);
+  border-color: #86efac;
+}
+
+/* 汉代古竹简/羊皮卷轴容器 */
+.gba-scroll {
+  background: #19130f;
+  color: #fef3c7;
+  border: 1px solid #78350f;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8);
+}
+
+/* 扫描线滤镜 */
+.scanlines {
+  position: relative;
+}
+
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.12) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes screen-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-4px, 3px); }
+  40% { transform: translate(4px, -3px); }
+  60% { transform: translate(-3px, -2px); }
+  80% { transform: translate(3px, 2px); }
+}
+
+.animate-shake {
+  animation: screen-shake 0.35s ease-in-out;
+}
+
+@keyframes crit-flash {
+  0% { opacity: 0; }
+  50% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+.animate-crit-flash {
+  animation: crit-flash 0.3s ease-out;
+}

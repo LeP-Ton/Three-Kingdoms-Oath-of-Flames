@@ -1,0 +1,6 @@
+{
+  "name": "三国志·烈火之誓",
+  "description": "基于《三国演义》改编的未来智能机器人穿越三国战棋 SRPG。玩家扮演战枢机体【天工·玄霄】，以未来科技协议与战功统率直属小队辅佐刘备逐鹿三国，与自主友方名将协同作战！首页包含全人物立绘资料大典。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
