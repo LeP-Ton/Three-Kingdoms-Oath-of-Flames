@@ -147,44 +147,6 @@ export interface Unit {
   isBoss?: boolean;
   aiType?: 'attack' | 'guard' | 'healer' | 'boss' | 'escape';
   talkTargets?: string[]; // 可在战场中交谈的目标ID
-  isRobot?: boolean; // 是否为未来智能战枢机体
-  energy?: number; // 纳米/等离子能源储备
-  maxEnergy?: number; // 最大能源
-  isDirectSquad?: boolean; // 是否为主角直接招募统辖的直属卫队部队
-  squadRole?: string; // 直属职能：如'先锋近卫'、'神机弩手'、'重装壁垒'、'机动斥候'、'战地医官'
-  techSkills?: TechSkillId[]; // 具备的未来科技战术技能
-  shieldHp?: number; // 动能偏转护盾吸收剩余值
-  tacticalStance?: 'aggressive' | 'defensive' | 'support'; // 自主友方名将协同作战姿态
-}
-
-export type TechSkillId =
-  | 'plasma_slash'     // 高频离子斩
-  | 'tactical_radar'   // 量子战术雷达
-  | 'nanite_repair'    // 纳米修复矩阵
-  | 'emp_shock'        // 电磁脉冲过载
-  | 'kinetic_shield'   // 动能偏转护盾
-  | 'orbital_strike';  // 轨道动能校准
-
-export interface TechSkill {
-  id: TechSkillId;
-  name: string;
-  nameEn: string;
-  energyCost: number;
-  range: number;
-  targetType: 'self' | 'ally' | 'enemy' | 'area';
-  description: string;
-  techEffectText: string;
-  unlockRank: number; // 军阶需求等级 (1-6)
-}
-
-export interface MilitaryRankInfo {
-  rankLevel: number;
-  title: string;
-  titleEn: string;
-  requiredMerits: number;
-  squadCap: number; // 直属部队编制定员上限
-  description: string;
-  rankReward: string;
 }
 
 export enum VictoryCondition {
@@ -294,6 +256,4 @@ export interface SaveSlot {
   completedStages: string[];
   recruitedCharacters: string[];
   protagonistName: string;
-  battleMerits?: number; // 累积战功
-  militaryRank?: number; // 当前军职品阶 (1-6)
 }

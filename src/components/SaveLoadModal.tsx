@@ -16,7 +16,6 @@ export interface SaveSlotData {
   stageSubtitle: string;
   turnNumber: number;
   gold: number;
-  battleMerits?: number;
   party: Unit[];
   leaderPortraitId: string;
 }
@@ -26,7 +25,6 @@ interface SaveLoadModalProps {
   currentStage: StageConfig;
   currentTurn: number;
   currentGold: number;
-  currentMerits?: number;
   currentParty: Unit[];
   onClose: () => void;
   onLoadData: (saveData: SaveSlotData) => void;
@@ -39,7 +37,6 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
   currentStage,
   currentTurn,
   currentGold,
-  currentMerits,
   currentParty,
   onClose,
   onLoadData,
@@ -79,7 +76,6 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
       stageSubtitle: currentStage.subtitle,
       turnNumber: currentTurn,
       gold: currentGold,
-      battleMerits: currentMerits ?? 0,
       party: currentParty,
       leaderPortraitId: leader.characterId,
     };

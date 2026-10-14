@@ -147,12 +147,9 @@ export function getPortraitDataUrl(
   } else if (['huatuo', 'zuoci'].includes(characterId)) {
     factionBadge = '仙';
     badgeBg = '#0284c7';
-  } else if (['protagonist', 'robot', 'chronos'].includes(characterId)) {
-    factionBadge = '科';
-    badgeBg = '#0e7490';
-  } else if (characterId.startsWith('squad_')) {
-    factionBadge = '卫';
-    badgeBg = '#047857';
+  } else if (characterId === 'protagonist') {
+    factionBadge = '汉';
+    badgeBg = '#b45309';
   }
 
   // 绘制印章

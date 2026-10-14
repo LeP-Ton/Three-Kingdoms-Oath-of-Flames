@@ -13,26 +13,20 @@ interface PrepScreenProps {
   stage: StageConfig;
   party: Unit[];
   gold: number;
-  battleMerits: number;
   onUpdateParty: (newParty: Unit[]) => void;
   onUpdateGold: (newGold: number) => void;
   onStartBattle: (selectedUnits: Unit[]) => void;
-  onOpenDirectSquad: () => void;
-  onOpenRoster: () => void;
 }
 
-type TabType = 'deploy' | 'inventory' | 'shop' | 'arena' | 'support';
+type TabType = 'deploy' | 'shop' | 'inventory' | 'arena' | 'support';
 
 export const PrepScreen: React.FC<PrepScreenProps> = ({
   stage,
   party,
   gold,
-  battleMerits,
   onUpdateParty,
   onUpdateGold,
   onStartBattle,
-  onOpenDirectSquad,
-  onOpenRoster,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('deploy');
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>(() =>
@@ -128,35 +122,14 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
           </h1>
           <p className="text-xs text-amber-200/80">{stage.subtitle} - {stage.description}</p>
         </div>
-        <div className="w-full sm:w-auto flex flex-wrap items-center justify-between sm:justify-end gap-2 text-xs sm:text-sm font-mono">
-          <span className="text-cyan-400 font-bold bg-stone-900/90 px-2 py-1 rounded border border-cyan-500/40">
-            🎖️ 战功: {battleMerits}
-          </span>
-          <span className="text-amber-400 font-bold bg-stone-900/90 px-2 py-1 rounded border border-amber-500/40">
+        <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end space-x-3 text-xs sm:text-sm font-mono">
+          <span className="text-amber-400 font-bold bg-stone-900/90 px-2.5 py-1 rounded border border-amber-500/40">
             💰 军资: {gold} 金
           </span>
           <button
-            onClick={() => {
-              audio.playMenuConfirm();
-              onOpenDirectSquad();
-            }}
-            className="px-2.5 py-1.5 bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-400 font-bold rounded cursor-pointer text-xs active:scale-95"
-          >
-            🛡️ 直属卫队整编
-          </button>
-          <button
-            onClick={() => {
-              audio.playMenuConfirm();
-              onOpenRoster();
-            }}
-            className="px-2.5 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-300 border border-amber-500/50 font-bold rounded cursor-pointer text-xs active:scale-95"
-          >
-            📜 名将立绘大典
-          </button>
-          <button
             id="start-chapter-btn"
             onClick={handleStart}
-            className="px-4 py-2 sm:px-5 sm:py-2 gba-btn font-bold text-amber-100 text-xs sm:text-sm tracking-wider cursor-pointer animate-pulse min-h-[36px] active:scale-95"
+            className="px-4 py-2 sm:px-6 sm:py-2.5 gba-btn font-bold text-amber-100 text-xs sm:text-sm tracking-wider cursor-pointer animate-pulse min-h-[40px]"
           >
             起兵出征 ▶
           </button>

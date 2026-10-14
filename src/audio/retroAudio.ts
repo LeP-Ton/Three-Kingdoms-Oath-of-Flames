@@ -56,14 +56,6 @@ class RetroAudioEngine {
     this.playAttackSwing();
   }
 
-  public playAttack() {
-    this.playAttackSwing();
-  }
-
-  public playMenuSelect() {
-    this.playCursorMove();
-  }
-
   public playHit() {
     this.playHitImpact();
   }

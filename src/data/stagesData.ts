@@ -145,15 +145,13 @@ export const ALL_STAGES: StageConfig[] = [
     victoryCondition: VictoryCondition.Rout,
     bgmTheme: 'heroic',
     preBattleDialogue: [
-      { speaker: 'protagonist', speakerName: '天工·玄霄', portraitId: 'protagonist', text: '【时空战枢自检完毕】曲率跃迁异常，已降落公元184年幽州涿县。侦测到大量流寇武装围攻乡邑，历史坐标锁定：黄巾之乱！' },
-      { speaker: 'liubei', speakerName: '刘备', portraitId: 'liubei', text: '天下大乱，生灵涂炭。玄霄先生神机天降、明见万里，备愿与先生结为莫逆，共讨黄巾，安抚黎民！' },
-      { speaker: 'protagonist', speakerName: '天工·玄霄', portraitId: 'protagonist', text: '锁定核心战略：襄助皇叔！机体目前初至汉末，尚无直属部曲，待战功升职后方可招募亲军。先启动量子雷达策应关张二位将军！' },
-      { speaker: 'guanyu', speakerName: '关羽', portraitId: 'guanyu', text: '兄长勿忧！玄霄先生此等机关神技，真乃天助我汉家社稷！剑克斧、斧克枪、枪克剑，看某取贼首脑！' },
+      { speaker: 'liubei', speakerName: '刘备', portraitId: 'liubei', text: '天下大乱，盗贼蜂起。今逢壮士，愿与君共讨黄巾，安抚黎民！' },
+      { speaker: 'protagonist', speakerName: '少主', portraitId: 'protagonist', text: '皇叔仁德素著，我等誓死相随！前方黄巾贼众当道，先破其锋锐！' },
+      { speaker: 'guanyu', speakerName: '关羽', portraitId: 'guanyu', text: '兄长勿忧！剑克斧、斧克枪、枪克剑。此乃兵家相克之道，看某取贼首脑！' },
     ],
     postBattleDialogue: [
-      { speaker: 'zhangfei', speakerName: '张飞', portraitId: 'zhangfei', text: '哈哈！痛快！先生手中那柄幽蓝光刃好生利落，轻轻一挥便撕开贼甲，比俺的蛇矛还神气！' },
-      { speaker: 'liubei', speakerName: '刘备', portraitId: 'liubei', text: '先生大德！此战克捷，备已向太守具表陈情，待积下战功授官，定许先生组建直属亲军小队！' },
-      { speaker: 'protagonist', speakerName: '天工·玄霄', portraitId: 'protagonist', text: '战功模块已记录战报。首战告捷，首批战功已录入。随军阶提升，便可招募直属卫士协助大军！' },
+      { speaker: 'zhangfei', speakerName: '张飞', portraitId: 'zhangfei', text: '哈哈！杀得痛快！这帮乌合之众，不堪某一矛之击！' },
+      { speaker: 'liubei', speakerName: '刘备', portraitId: 'liubei', text: '首战虽捷，然黄巾主力尚在广宗，不可轻敌。速整军前行。' },
     ],
     events: [
       {
@@ -161,7 +159,7 @@ export const ALL_STAGES: StageConfig[] = [
         villageX: 7,
         villageY: 3,
         dialogue: [
-          { speaker: 'villager', speakerName: '老丈', portraitId: 'cleric', text: '幽州义军与神机天人救了俺们全村！这瓶金创伤药与盘缠请将军务必收下！' },
+          { speaker: 'villager', speakerName: '老丈', portraitId: 'cleric', text: '义军英雄救了俺们村！这瓶金创伤药请将军务必收下！' },
         ],
         rewardItem: ITEMS_DATABASE.vulnerary,
         rewardGold: 500,
@@ -202,11 +200,11 @@ export const ALL_STAGES: StageConfig[] = [
     surviveTurns: 6,
     bgmTheme: 'battle',
     preBattleDialogue: [
-      { speaker: 'protagonist', speakerName: '天工·玄霄', portraitId: 'protagonist', text: '【战术扫描警报】量子雷达侦测到程远志部趁夜合围！进入森林与要塞可大幅提升回避与防御！' },
-      { speaker: 'guanyu', speakerName: '关羽', portraitId: 'guanyu', text: '入林避矢，据垒固防。先生居中调度雷达，待贼军力竭，某与翼德自当杀出！' },
+      { speaker: 'protagonist', speakerName: '少主', portraitId: 'protagonist', text: '敌人趁夜偷袭！前有要塞与茂密树林，进可攻退可守！' },
+      { speaker: 'guanyu', speakerName: '关羽', portraitId: 'guanyu', text: '入林避矢，据垒固防。林木可增二分回避，要塞能缓回气血！' },
     ],
     postBattleDialogue: [
-      { speaker: 'liubei', speakerName: '刘备', portraitId: 'liubei', text: '贼军败走！守御严密，玄霄先生之测算与二弟三弟之勇，天衣无缝！' },
+      { speaker: 'liubei', speakerName: '刘备', portraitId: 'liubei', text: '贼军败走！守御严密，天佑义军！' },
     ],
     events: [],
   },

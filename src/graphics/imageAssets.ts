@@ -40,26 +40,15 @@ import portraitZhangjiao from '../assets/images/portrait_zhangjiao_1791875093980
 import portraitHuatuo from '../assets/images/portrait_huatuo_1791876947618.jpg';
 import portraitZuoci from '../assets/images/portrait_zuoci_1791876994590.jpg';
 
-// 穿越未来智能机器人主角 (代号: 天工-VII / 玄霄 Chronos-7)
-import portraitProtagonist from '../assets/images/portrait_robot_protagonist_1791977121616.jpg';
-
-// 直属小队精锐卫士
-import portraitSquadGuard from '../assets/images/portrait_squad_guard_1791977140056.jpg';
+// 主角
+import portraitProtagonist from '../assets/images/portrait_protagonist_1789704242904.jpg';
 
 export const ART_ASSETS = {
   titleBanner,
   portraits: {
-    // 未来智能机器人主角 (天工·玄霄)
+    // 主角
     protagonist: portraitProtagonist,
     p_hero: portraitProtagonist,
-    robot: portraitProtagonist,
-    chronos: portraitProtagonist,
-
-    // 直属小队兵种
-    squad_guard: portraitSquadGuard,
-    squad_archer: portraitSquadGuard,
-    squad_knight: portraitSquadGuard,
-    squad_medic: portraitSquadGuard,
 
     // 蜀汉阵营 (全员独立专属立绘)
     liubei: portraitLiubei,

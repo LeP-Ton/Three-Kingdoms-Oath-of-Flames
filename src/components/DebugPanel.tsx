@@ -13,14 +13,12 @@ interface DebugPanelProps {
   currentStage: StageConfig;
   party: Unit[];
   gold: number;
-  battleMerits?: number;
   casualMode: boolean;
   onClose: () => void;
   onJumpStage: (stage: StageConfig) => void;
   onWinStage: () => void;
   onUpdateParty: (newParty: Unit[]) => void;
   onUpdateGold: (newGold: number) => void;
-  onUpdateMerits?: (newMerits: number) => void;
   onToggleCasualMode: () => void;
 }
 
@@ -28,14 +26,12 @@ export const DebugPanel: React.FC<DebugPanelProps> = ({
   currentStage,
   party,
   gold,
-  battleMerits = 0,
   casualMode,
   onClose,
   onJumpStage,
   onWinStage,
   onUpdateParty,
   onUpdateGold,
-  onUpdateMerits,
   onToggleCasualMode,
 }) => {
   // 全神兵赋予
@@ -124,12 +120,6 @@ export const DebugPanel: React.FC<DebugPanelProps> = ({
             className="p-2 bg-purple-900 hover:bg-purple-800 text-purple-100 font-bold rounded border border-purple-500 cursor-pointer"
           >
             赋予全武将神兵利器
-          </button>
-          <button
-            onClick={() => onUpdateMerits && onUpdateMerits(battleMerits + 500)}
-            className="p-2 bg-cyan-900 hover:bg-cyan-800 text-cyan-100 font-bold rounded border border-cyan-500 cursor-pointer"
-          >
-            +500 战功 (一键升职)
           </button>
           <button
             onClick={maxStatsAll}

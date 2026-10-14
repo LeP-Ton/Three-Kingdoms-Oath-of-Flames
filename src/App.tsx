@@ -32,11 +32,6 @@ import { GbaControls } from './components/GbaControls';
 import { SaveLoadModal, SaveSlotData } from './components/SaveLoadModal';
 import { DebugPanel } from './components/DebugPanel';
 import { DesignDocModal } from './components/DesignDocModal';
-import { CharacterRosterModal } from './components/CharacterRosterModal';
-import { DirectSquadModal } from './components/DirectSquadModal';
-import { TechSkillModal } from './components/TechSkillModal';
-import { ALL_CHARACTERS_ROSTER } from './data/charactersData';
-import { TECH_SKILLS, TechSkillId, getRankByMerits } from './data/techSkillsData';
 
 type GameMode =
   | 'title'
@@ -60,12 +55,7 @@ export default function App() {
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
   const [party, setParty] = useState<Unit[]>(INITIAL_PARTY);
   const [gold, setGold] = useState(1200);
-  const [battleMerits, setBattleMerits] = useState(0); // 战功点数 (用于升职拜将与直属卫队扩编)
   const [casualMode, setCasualMode] = useState(false); // 经典/轻松模式
-  const [showCharacterRoster, setShowCharacterRoster] = useState(false);
-  const [rosterSelectedId, setRosterSelectedId] = useState<string | undefined>(undefined);
-  const [showDirectSquad, setShowDirectSquad] = useState(false);
-  const [showTechSkill, setShowTechSkill] = useState(false);
 
   // 当前关卡进行时状态
   const currentStage: StageConfig = ALL_STAGES[currentStageIndex] || ALL_STAGES[0];
@@ -83,12 +73,12 @@ export default function App() {
   const [showDangerZone, setShowDangerZone] = useState(false);
   const [dangerZone, setDangerZone] = useState<Set<string>>(new Set());
 
-  // 行动指令菜单 (移动后弹出：攻击、道具、访问、制压、待机、取消、科技技能)
+  // 行动指令菜单 (移动后弹出：攻击、道具、访问、制压、待机、取消)
   const [actionMenu, setActionMenu] = useState<{
     unit: Unit;
     x: number;
     y: number;
-    options: ('attack' | 'staff' | 'item' | 'visit' | 'seize' | 'wait' | 'cancel' | 'tech_skill')[];
+    options: ('attack' | 'staff' | 'item' | 'visit' | 'seize' | 'wait' | 'cancel')[];
   } | null>(null);
 
   // 攻击目标选择状态
@@ -222,7 +212,6 @@ export default function App() {
   // 关卡胜利结算
   const handleStageVictoryFinish = () => {
     setGold((prev) => prev + 1500);
-    setBattleMerits((prev) => prev + 250);
 
     if (currentStageIndex >= ALL_STAGES.length - 1 || currentStage.id === 'stage_5_5') {
       setMode('victory_ending');
@@ -328,7 +317,7 @@ export default function App() {
 
           // 计算可用行动指令
           const weapon = movedUnit.inventory[movedUnit.equippedWeaponIndex] || null;
-          const options: ('attack' | 'staff' | 'item' | 'visit' | 'seize' | 'tech_skill' | 'wait' | 'cancel')[] = [];
+          const options: ('attack' | 'staff' | 'item' | 'visit' | 'seize' | 'wait' | 'cancel')[] = [];
 
           // 检查攻击范围内是否有存活敌军
           if (weapon && weapon.type !== WeaponType.Item && weapon.type !== WeaponType.Staff) {
@@ -362,11 +351,6 @@ export default function App() {
             options.push('seize');
           }
 
-          // 检查未来科技技能 (若单位为机器人主角或具备科技技能)
-          if (movedUnit.isRobot || movedUnit.characterId === 'protagonist') {
-            options.push('tech_skill');
-          }
-
           options.push('wait');
           options.push('cancel');
 
@@ -386,12 +370,6 @@ export default function App() {
   const handleActionSelect = (action: string) => {
     if (!actionMenu) return;
     const { unit, x, y } = actionMenu;
-
-    if (action === 'tech_skill') {
-      audio.playMenuConfirm();
-      setShowTechSkill(true);
-      return;
-    }
 
     if (action === 'cancel') {
       audio.playMenuCancel();
@@ -490,71 +468,6 @@ export default function App() {
     }
   };
 
-  // 释放未来科技技能处理
-  const handleExecuteTechSkill = (
-    skillId: TechSkillId,
-    targetUnit?: Unit,
-    effectResult?: { message: string }
-  ) => {
-    setShowTechSkill(false);
-    const actor = actionMenu?.unit || selectedUnit;
-    if (!actor) return;
-    const skill = TECH_SKILLS[skillId];
-
-    let nextUnits = [...battleUnits];
-    const currentActor = nextUnits.find((u) => u.id === actor.id);
-    if (currentActor) {
-      currentActor.energy = Math.max(0, (currentActor.energy ?? 60) - skill.energyCost);
-      currentActor.hasActed = true;
-
-      if (skillId === 'plasma_slash' && targetUnit) {
-        const target = nextUnits.find((u) => u.id === targetUnit.id);
-        if (target) {
-          target.stats.hp = Math.max(0, target.stats.hp - 18);
-          if (target.stats.hp <= 0) {
-            target.isAlive = false;
-            setBattleMerits((prev) => prev + (target.isBoss ? 80 : 20));
-          }
-        }
-      } else if (skillId === 'nanite_repair' && targetUnit) {
-        const target = nextUnits.find((u) => u.id === targetUnit.id);
-        if (target) {
-          target.stats.hp = Math.min(target.stats.maxHp, target.stats.hp + 22);
-        }
-      } else if (skillId === 'emp_shock' && targetUnit) {
-        const target = nextUnits.find((u) => u.id === targetUnit.id);
-        if (target) {
-          target.stats.hp = Math.max(0, target.stats.hp - 12);
-          target.stats.mov = Math.max(1, target.stats.mov - 2);
-          if (target.stats.hp <= 0) {
-            target.isAlive = false;
-            setBattleMerits((prev) => prev + (target.isBoss ? 80 : 20));
-          }
-        }
-      } else if (skillId === 'kinetic_shield') {
-        currentActor.shieldHp = 25;
-      } else if (skillId === 'orbital_strike' && targetUnit) {
-        const target = nextUnits.find((u) => u.id === targetUnit.id);
-        if (target) {
-          target.stats.hp = Math.max(0, target.stats.hp - 26);
-          if (target.stats.hp <= 0) {
-            target.isAlive = false;
-            setBattleMerits((prev) => prev + (target.isBoss ? 80 : 20));
-          }
-        }
-      }
-    }
-
-    setBattleUnits(nextUnits);
-    setSelectedUnit(null);
-    setActionMenu(null);
-    if (effectResult?.message) {
-      triggerPhaseBanner(effectResult.message);
-    }
-    checkBattleCondition(nextUnits, currentTurn);
-    checkTurnEnd(nextUnits);
-  };
-
   // 战斗动画结算完毕回调
   const handleFinishCombat = (result: {
     attacker: Unit;
@@ -578,11 +491,6 @@ export default function App() {
     }
     if (result.defenderDied && !casualMode && result.defender.faction === Faction.Player) {
       setParty((prev) => prev.filter((p) => p.id !== result.defender.id));
-    }
-
-    // 斩杀敌兵或Boss获取战功
-    if (result.defenderDied && result.defender.faction === Faction.Enemy) {
-      setBattleMerits((prev) => prev + (result.defender.isBoss ? 80 : 20));
     }
 
     setBattleUnits(nextUnits);
@@ -739,40 +647,60 @@ export default function App() {
     <div id="game-root" className="relative w-screen h-screen overflow-hidden bg-stone-950 text-stone-100 flex flex-col font-sans scanlines">
       {/* 1. 游戏标题开场画面 (Title Screen) */}
       {mode === 'title' && (
-        <div id="title-screen" className="relative flex-1 flex flex-col items-center p-3 sm:p-6 bg-radial from-amber-950/70 via-stone-950 to-black select-none overflow-y-auto gba-scroll">
-          <div className="w-full max-w-4xl animate-fade-in my-auto py-2 sm:py-4 flex flex-col items-center">
-            {/* 桃园结义与时空战枢史诗主视觉 Banner */}
-            <div className="relative mx-auto mb-3 w-full max-w-2xl rounded-lg overflow-hidden border-2 border-amber-500/80 shadow-[0_0_30px_rgba(245,158,11,0.3)] bg-stone-950">
+        <div id="title-screen" className="relative flex-1 flex flex-col items-center justify-center p-4 md:p-6 bg-radial from-amber-950/70 via-stone-950 to-black select-none overflow-y-auto gba-scroll">
+          <div className="text-center max-w-3xl animate-fade-in my-auto py-4">
+            {/* 桃园结义史诗像素主视觉 Banner */}
+            <div className="relative mx-auto mb-4 w-full max-w-xl rounded-lg overflow-hidden border-2 border-amber-500/80 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-stone-950">
               <img
                 src={ART_ASSETS.titleBanner}
-                alt="三国志·烈火之誓 桃园结义与时空降临"
-                className="w-full h-36 sm:h-48 md:h-56 object-cover pixelated"
+                alt="三国志·烈火之誓 桃园结义"
+                className="w-full h-44 sm:h-52 md:h-60 object-cover pixelated"
                 style={{ imageRendering: 'pixelated' }}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-              <div className="absolute top-2 left-3 px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400/60 text-[10px] sm:text-xs font-mono text-cyan-300">
-                CHRONOS PROTOCOL · 未来智能机器人穿越三国
-              </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
               <div className="absolute bottom-2 left-3 right-3 flex items-center justify-between text-[11px] font-mono text-amber-300/90 drop-shadow">
                 <span>GBA FIRE EMBLEM ENGINE</span>
                 <span>CHAPTER 1 - 30 COMPLETE SAGA</span>
               </div>
             </div>
 
-            <div className="text-[11px] sm:text-xs font-bold tracking-widest text-cyan-400 uppercase mb-1 font-mono">
-              ★ 未来智能机体战枢降临 · 辅助刘备逐鹿三国 · 严格遵循《三国演义》★
+            <div className="text-xs md:text-sm font-bold tracking-widest text-amber-500 uppercase mb-1">
+              GBA FIRE EMBLEM TACTICAL SRPG · 三国志题材经典战棋
             </div>
-
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-amber-400 pixel-font tracking-wider drop-shadow-2xl mb-2 text-center">
+            <h1 className="text-3xl md:text-5xl font-black text-amber-400 pixel-font tracking-wider drop-shadow-2xl mb-3">
               三国志 · 烈火之誓
             </h1>
-
-            <p className="text-stone-300 text-xs sm:text-sm leading-relaxed mb-4 max-w-2xl text-center px-2">
-              玩家扮演意外穿越至东汉末年的未来智能机器人【天工·玄霄】，以高频等离子刃、量子战术雷达、纳米修复等科技协议参与经典战役。初始单机作战无直属部曲，随战功积累升职拜将、组建并扩编直属特种卫队，与自主行动的刘关张赵等三国名将协同作战！历史主线与结局严格遵循《三国演义》！
+            <p className="text-stone-300 text-xs md:text-sm leading-relaxed mb-5 max-w-xl mx-auto">
+              桃园一拜，天下云飞。承袭 GBA 火焰纹章纯正战棋血脉，30 大历史战役、武器三角相克、攻速追击与历代名将收服！
             </p>
 
-            {/* 核心操作主按键群 */}
-            <div className="flex flex-wrap items-center justify-center gap-2.5 w-full max-w-xl mx-auto mb-5 z-20">
+            {/* 名将头像展示廊 (三国群英像素立绘预览 - 移动端顺滑横滑) */}
+            <div className="flex items-center justify-start sm:justify-center gap-2 mb-5 p-2 rounded-lg bg-[#140e0a]/90 border border-amber-500/40 max-w-xl mx-auto overflow-x-auto whitespace-nowrap scrollbar-none shadow-inner">
+              {[
+                { id: 'liubei', name: '刘备' },
+                { id: 'guanyu', name: '关羽' },
+                { id: 'zhangfei', name: '张飞' },
+                { id: 'zhaoyun', name: '赵云' },
+                { id: 'zhugeliang', name: '诸葛亮' },
+                { id: 'lubu', name: '吕布' },
+                { id: 'diaochan', name: '貂蝉' },
+                { id: 'caocao', name: '曹操' },
+                { id: 'dongzhuo', name: '董卓' },
+                { id: 'protagonist', name: '玄霄' },
+              ].map((hero) => (
+                <div key={hero.id} className="flex flex-col items-center flex-shrink-0 group px-1" title={hero.name}>
+                  <img
+                    src={getPortraitDataUrl(hero.id, 'normal')}
+                    alt={hero.name}
+                    className="w-9 h-9 sm:w-11 sm:h-11 object-cover pixelated rounded border border-amber-500/60 bg-stone-950 transition-transform group-hover:scale-110 shadow"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
+                  <span className="text-[10px] text-amber-200 mt-1 font-bold">{hero.name}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-md mx-auto relative z-20">
               <button
                 id="start-game-btn"
                 onClick={() => {
@@ -784,9 +712,9 @@ export default function App() {
                   }
                   setMode('prep');
                 }}
-                className="px-6 py-2.5 gba-btn font-bold text-sm sm:text-base text-amber-100 tracking-widest cursor-pointer shadow-xl active:scale-95 min-h-[42px]"
+                className="w-full sm:w-auto px-6 py-3 gba-btn font-bold text-base text-amber-100 tracking-widest cursor-pointer shadow-xl active:scale-95 min-h-[44px]"
               >
-                征战起兵 (开局) ▶
+                征战起兵 (开局)
               </button>
               <button
                 id="load-game-btn"
@@ -799,27 +727,9 @@ export default function App() {
                   }
                   setSaveLoadMode('load');
                 }}
-                className="px-5 py-2.5 gba-window font-bold text-xs sm:text-sm text-amber-300 hover:text-amber-100 border border-amber-500/50 cursor-pointer active:scale-95 min-h-[42px]"
+                className="w-full sm:w-auto px-6 py-3 gba-window font-bold text-base text-amber-300 hover:text-amber-100 border border-amber-500/50 cursor-pointer active:scale-95 min-h-[44px]"
               >
                 往昔卷宗 (读档)
-              </button>
-              <button
-                onClick={() => {
-                  audio.playMenuConfirm();
-                  setShowDirectSquad(true);
-                }}
-                className="px-5 py-2.5 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200 border border-cyan-400 font-bold text-xs sm:text-sm rounded cursor-pointer active:scale-95 min-h-[42px] shadow"
-              >
-                🛡️ 直属卫队整编 (战功升职)
-              </button>
-              <button
-                onClick={() => {
-                  audio.playMenuConfirm();
-                  setShowCharacterRoster(true);
-                }}
-                className="px-5 py-2.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-500 font-bold text-xs sm:text-sm rounded cursor-pointer active:scale-95 min-h-[42px] shadow"
-              >
-                📜 名将全录立绘大典 (28+名将)
               </button>
               <button
                 id="open-design-doc-btn"
@@ -831,84 +741,16 @@ export default function App() {
                   }
                   setShowDesignDoc(true);
                 }}
-                className="px-4 py-2.5 gba-window font-bold text-xs text-stone-300 hover:text-amber-200 border border-stone-700 cursor-pointer active:scale-95 min-h-[42px]"
+                className="w-full sm:w-auto px-6 py-3 gba-window font-bold text-base text-stone-300 hover:text-amber-200 border border-stone-700 cursor-pointer active:scale-95 min-h-[44px]"
               >
                 策划白皮书
               </button>
             </div>
 
-            {/* 首页全人物立绘效果快速检视大典 (满足第2点：首页直接列出所有人物资料，方便检查立绘效果) */}
-            <div className="w-full bg-[#120c08]/95 p-3 sm:p-4 rounded-xl border border-amber-500/50 shadow-2xl mb-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 mb-3 border-b border-amber-500/30 gap-1.5">
-                <div className="flex items-center space-x-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_#f59e0b]" />
-                  <span className="text-xs sm:text-sm font-black text-amber-300 pixel-font tracking-wide">
-                    【首页直观检视】三国群英人物资料与立绘效果展评
-                  </span>
-                </div>
-                <div className="text-[11px] text-stone-400">
-                  共收录 <span className="text-amber-300 font-mono font-bold">{ALL_CHARACTERS_ROSTER.length}</span> 位独立立绘人物 · 点击可开大图
-                </div>
-              </div>
-
-              {/* 首页全名将卡片网格 (支持逐一检查立绘、纯净度与六维属性) */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-72 overflow-y-auto p-1 gba-scroll">
-                {ALL_CHARACTERS_ROSTER.map((char) => (
-                  <div
-                    key={char.id}
-                    onClick={() => {
-                      audio.playMenuSelect();
-                      setRosterSelectedId(char.id);
-                      setShowCharacterRoster(true);
-                    }}
-                    className="p-1.5 rounded-lg bg-stone-900/80 hover:bg-stone-800 border border-stone-700 hover:border-amber-400 transition-all cursor-pointer flex flex-col items-center group relative shadow-md"
-                    title={`点击查看 ${char.name} 的详细传记与放大像素立绘`}
-                  >
-                    {/* 立绘微缩窗 */}
-                    <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden border border-amber-500/40 bg-stone-950 shadow-inner">
-                      <img
-                        src={getPortraitDataUrl(char.portraitId, 'normal')}
-                        alt={char.name}
-                        className="w-full h-full object-cover pixelated group-hover:scale-110 transition-transform"
-                        style={{ imageRendering: 'pixelated' }}
-                      />
-                      <span className="absolute bottom-0 right-0 px-1 text-[8px] bg-black/80 text-amber-300 font-bold rounded-tl border-t border-l border-amber-500/40">
-                        {char.faction.slice(0, 1)}
-                      </span>
-                    </div>
-
-                    <div className="mt-1 text-center w-full">
-                      <div className="text-xs font-bold text-amber-200 truncate group-hover:text-amber-300">
-                        {char.name}
-                      </div>
-                      <div className="text-[9px] text-stone-400 truncate">
-                        {char.title}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-2.5 pt-2 border-t border-amber-500/20 flex flex-wrap items-center justify-between text-[10px] text-stone-400">
-                <span>★ 画风统一标准：16-bit GBA 顶级像素立绘，严格对标吕布高规格，全员纯净无文字框杂质。</span>
-                <button
-                  onClick={() => {
-                    audio.playMenuConfirm();
-                    setShowCharacterRoster(true);
-                  }}
-                  className="text-amber-400 hover:text-amber-200 underline cursor-pointer font-bold ml-auto"
-                >
-                  打开完整立绘检视大典 (含生平原著考据) ▶
-                </button>
-              </div>
-            </div>
-
-            <div className="text-xs text-stone-400 flex items-center justify-center space-x-3 text-center">
-              <span>关卡总量: 30 战役 (25 主线 + 5 隐藏)</span>
+            <div className="mt-5 text-xs text-stone-400 flex items-center justify-center space-x-4">
+              <span>关卡总量: 30 关 (25 主线 + 5 隐藏)</span>
               <span>•</span>
-              <span>武器三角相克与攻速追击</span>
-              <span>•</span>
-              <span>战功升职与直属小队统辖</span>
+              <span>三国纯正像素美术与复古和弦引擎</span>
             </div>
           </div>
         </div>
@@ -920,11 +762,8 @@ export default function App() {
           stage={currentStage}
           party={party}
           gold={gold}
-          battleMerits={battleMerits}
           onUpdateParty={setParty}
           onUpdateGold={setGold}
-          onOpenDirectSquad={() => setShowDirectSquad(true)}
-          onOpenRoster={() => setShowCharacterRoster(true)}
           onStartBattle={(selectedUnits) => {
             initStage(currentStage, selectedUnits);
           }}
@@ -991,20 +830,6 @@ export default function App() {
                 存档
               </button>
               <button
-                onClick={() => setShowCharacterRoster(true)}
-                className="px-1.5 py-1 min-h-[34px] bg-amber-950/80 hover:bg-amber-900 text-amber-300 rounded border border-amber-600/80 cursor-pointer text-[11px] font-bold active:scale-95"
-                title="查看全人物立绘资料大典"
-              >
-                图鉴
-              </button>
-              <button
-                onClick={() => setShowDirectSquad(true)}
-                className="px-1.5 py-1 min-h-[34px] bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200 rounded border border-cyan-500/80 cursor-pointer text-[11px] font-bold active:scale-95"
-                title="直属战术卫队整编与战功升职"
-              >
-                卫队
-              </button>
-              <button
                 onClick={() => setShowDebug(true)}
                 className="px-1.5 py-1 min-h-[34px] bg-purple-950/80 hover:bg-purple-900 text-purple-300 rounded border border-purple-700 cursor-pointer text-[11px] font-bold active:scale-95"
               >
@@ -1068,14 +893,6 @@ export default function App() {
                       className="w-full text-left px-2.5 py-1.5 min-h-[36px] rounded bg-red-950/80 hover:bg-red-800 text-red-200 font-bold cursor-pointer active:scale-95 flex items-center"
                     >
                       ⚔ 攻击
-                    </button>
-                  )}
-                  {actionMenu.options.includes('tech_skill') && (
-                    <button
-                      onClick={() => handleActionSelect('tech_skill')}
-                      className="w-full text-left px-2.5 py-1.5 min-h-[36px] rounded bg-cyan-950/90 hover:bg-cyan-800 text-cyan-200 font-bold cursor-pointer active:scale-95 flex items-center border border-cyan-500/60 shadow"
-                    >
-                      🤖 科技协议
                     </button>
                   )}
                   {actionMenu.options.includes('visit') && (
@@ -1218,16 +1035,6 @@ export default function App() {
                 <span className="text-stone-300">赏金入库:</span>
                 <span className="text-green-400 font-bold">+1500 金</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-stone-300">战功斩获:</span>
-                <span className="text-cyan-400 font-bold">+250 功勋</span>
-              </div>
-              <div className="flex justify-between border-t border-stone-800 pt-1.5">
-                <span className="text-stone-300">累积战功 / 当前官阶:</span>
-                <span className="text-amber-300 font-bold">
-                  {battleMerits} 功勋 · 【{getRankByMerits(battleMerits).title}】
-                </span>
-              </div>
             </div>
 
             <button
@@ -1325,7 +1132,6 @@ export default function App() {
           currentStage={currentStage}
           party={party}
           gold={gold}
-          battleMerits={battleMerits}
           casualMode={casualMode}
           onClose={() => setShowDebug(false)}
           onJumpStage={(stg) => {
@@ -1336,47 +1142,12 @@ export default function App() {
           onWinStage={handleStageVictoryFinish}
           onUpdateParty={setParty}
           onUpdateGold={setGold}
-          onUpdateMerits={setBattleMerits}
           onToggleCasualMode={() => setCasualMode((prev) => !prev)}
         />
       )}
 
       {/* 策划设计案文档 */}
       {showDesignDoc && <DesignDocModal onClose={() => setShowDesignDoc(false)} />}
-
-      {/* 10. 三国名将全录与全立绘检视大典 */}
-      {showCharacterRoster && (
-        <CharacterRosterModal
-          initialSelectedId={rosterSelectedId}
-          onClose={() => {
-            setShowCharacterRoster(false);
-            setRosterSelectedId(undefined);
-          }}
-        />
-      )}
-
-      {/* 11. 直属小队整编与战功授印晋阶界面 */}
-      {showDirectSquad && (
-        <DirectSquadModal
-          battleMerits={battleMerits}
-          gold={gold}
-          party={party}
-          onUpdateParty={setParty}
-          onUpdateGold={setGold}
-          onClose={() => setShowDirectSquad(false)}
-        />
-      )}
-
-      {/* 12. 未来战枢科技协议释放视窗 */}
-      {showTechSkill && (actionMenu?.unit || selectedUnit) && (
-        <TechSkillModal
-          actor={actionMenu?.unit || selectedUnit!}
-          allUnits={battleUnits}
-          battleMerits={battleMerits}
-          onExecuteSkill={handleExecuteTechSkill}
-          onClose={() => setShowTechSkill(false)}
-        />
-      )}
     </div>
   );
 }
