@@ -1,6 +1,6 @@
 /**
  * 三国志·烈火之誓 - 角色基础属性、成长率与初始配置数据
- * 包含 25+ 位蜀、魏、吴名将与隐藏传奇角色
+ * 历史名将模板与玄霄的初始科技装备
  */
 
 import { Unit, Faction, UnitClass, WeaponRank, WeaponType } from '../types';
@@ -49,8 +49,8 @@ export function createBaseUnit(
   };
 }
 
-// 初始玩家队伍（第1章涿县起兵阵容）
-export function getInitialPartyUnits(protagonistName: string = '玄霄'): Unit[] {
+// 历史人物模板仅供关卡友军使用，不计入玄霄的直属编制。
+function getFoundingHistoricalUnits(protagonistName: string = '玄霄'): Unit[] {
   return [
     // 1. 原创主角
     createBaseUnit(
@@ -128,9 +128,9 @@ export function getInitialPartyUnits(protagonistName: string = '玄霄'): Unit[]
   ];
 }
 
-// 随章节加入的角色库
-export const RECRUITABLE_CHARACTERS: Record<string, () => Unit> = {
-  // 赵云 (第2章界桥之战登场)
+// 按历史时序供关卡调用的名将模板库
+export const HISTORICAL_CHARACTERS: Record<string, () => Unit> = {
+  // 赵云（界桥相识时仍属公孙瓒）
   zhaoyun: () =>
     createBaseUnit(
       'p_zhaoyun',
@@ -145,7 +145,7 @@ export const RECRUITABLE_CHARACTERS: Record<string, () => Unit> = {
       { [WeaponType.Lance]: WeaponRank.B, [WeaponType.Sword]: WeaponRank.C }
     ),
 
-  // 诸葛亮 (第3章江夏集结/草船借箭登场)
+  // 诸葛亮（三顾茅庐后参与主线）
   zhugeliang: () =>
     createBaseUnit(
       'p_zhugeliang',
@@ -160,7 +160,7 @@ export const RECRUITABLE_CHARACTERS: Record<string, () => Unit> = {
       { [WeaponType.Anima]: WeaponRank.A, [WeaponType.Light]: WeaponRank.B, [WeaponType.Staff]: WeaponRank.A }
     ),
 
-  // 黄忠 (老将，第4章汉中攻防加入)
+  // 黄忠（荆南平定后参与主线）
   huangzhong: () =>
     createBaseUnit(
       'p_huangzhong',
@@ -295,67 +295,36 @@ export const RECRUITABLE_CHARACTERS: Record<string, () => Unit> = {
       { [WeaponType.Lance]: WeaponRank.S, [WeaponType.Axe]: WeaponRank.A }
     ),
 
-  // --- 隐藏角色 (Hidden Characters) ---
-  // 1. 貂蝉 (隐藏关1获取)
-  diaochan: () =>
-    createBaseUnit(
-      'p_diaochan',
-      '貂蝉',
-      '闭月红颜',
-      'diaochan',
-      UnitClass.Bishop,
-      8,
-      { hp: 25, str: 2, mag: 14, skl: 14, spd: 16, lck: 18, def: 5, res: 14, con: 6, mov: 6 },
-      { hp: 65, str: 10, mag: 65, skl: 60, spd: 70, lck: 80, def: 30, res: 75 },
-      ['physic_staff', 'lightning_tome', 'elixir'],
-      { [WeaponType.Staff]: WeaponRank.A, [WeaponType.Light]: WeaponRank.B }
-    ),
-
-  // 2. 吕布 (隐藏关2/白门楼说服获取)
-  lubu: () =>
-    createBaseUnit(
-      'p_lubu',
-      '吕布',
-      '飞将无双',
-      'lubu',
-      UnitClass.Warlord,
-      16,
-      { hp: 50, str: 24, mag: 0, skl: 20, spd: 22, lck: 8, def: 17, res: 6, con: 17, mov: 8 },
-      { hp: 95, str: 75, mag: 5, skl: 70, spd: 70, lck: 30, def: 50, res: 20 },
-      ['fangtian_halberd', 'killer_bow', 'elixir'],
-      { [WeaponType.Lance]: WeaponRank.S, [WeaponType.Bow]: WeaponRank.A, [WeaponType.Sword]: WeaponRank.A }
-    ),
-
-  // 3. 华佗 (隐藏关3/名医加入)
-  huatuo: () =>
-    createBaseUnit(
-      'p_huatuo',
-      '华佗',
-      '再世神医',
-      'huatuo',
-      UnitClass.Bishop,
-      15,
-      { hp: 36, str: 1, mag: 20, skl: 18, spd: 15, lck: 20, def: 8, res: 18, con: 7, mov: 6 },
-      { hp: 70, str: 5, mag: 80, skl: 70, spd: 55, lck: 85, def: 35, res: 80 },
-      ['physic_staff', 'mend_staff', 'elixir'],
-      { [WeaponType.Staff]: WeaponRank.S, [WeaponType.Light]: WeaponRank.A }
-    ),
-
-  // 4. 左慈 (隐藏关4加入)
-  zuoci: () =>
-    createBaseUnit(
-      'p_zuoci',
-      '左慈',
-      '乌角仙人',
-      'zuoci',
-      UnitClass.Sage,
-      18,
-      { hp: 40, str: 0, mag: 23, skl: 21, spd: 19, lck: 16, def: 10, res: 22, con: 8, mov: 6 },
-      { hp: 75, str: 5, mag: 85, skl: 75, spd: 65, lck: 60, def: 40, res: 85 },
-      ['taiping_secret', 'flux_tome', 'elixir'],
-      { [WeaponType.Anima]: WeaponRank.S, [WeaponType.Dark]: WeaponRank.A }
-    ),
 };
 
-export const INITIAL_PARTY: Unit[] = getInitialPartyUnits();
+export function getInitialPartyUnits(): Unit[] {
+  const hero = getFoundingHistoricalUnits()[0];
+  return [{
+    ...hero,
+    title: '未来穿越者',
+    stats: { ...hero.stats, hp: 28, maxHp: 28, str: 9, def: 7, res: 5 },
+    inventory: ['pulse_carbine', 'nano_medkit'].map((id) => ({ ...ITEMS_DATABASE[id] })),
+    weaponRanks: { [WeaponType.Bow]: WeaponRank.S, [WeaponType.Sword]: WeaponRank.D },
+  }];
+}
 
+export function createHistoricalAlly(characterId: string, level: number): Unit {
+  const template = getFoundingHistoricalUnits().find((unit) => unit.characterId === characterId)
+    ?? HISTORICAL_CHARACTERS[characterId]?.();
+  if (!template) throw new Error(`缺少历史友军模板：${characterId}`);
+  const growth = Math.max(0, level - template.level);
+  const hp = template.stats.maxHp + growth * 2;
+  return {
+    ...template,
+    id: `ally_${characterId}`,
+    faction: Faction.Ally,
+    level: Math.max(level, template.level),
+    aiType: characterId === 'sunqian' ? 'healer' : 'attack',
+    stats: {
+      ...template.stats, hp, maxHp: hp,
+      str: template.stats.str + growth,
+      def: template.stats.def + Math.floor(growth / 2),
+      spd: template.stats.spd + Math.floor(growth / 2),
+    },
+  };
+}

@@ -33,9 +33,15 @@ export const CombatArena: React.FC<CombatArenaProps> = ({
   onFinishCombat,
 }) => {
   // 战斗模拟预结算
-  const [simulationResult] = useState(() =>
-    simulateCombat(attacker, defender, distance, defenderTerrain, attackerTerrain)
-  );
+  const [simulationResult] = useState(() => {
+    const attackerCopy = { ...attacker, inventory: attacker.inventory.map((item) => ({ ...item })) };
+    const defenderCopy = { ...defender, inventory: defender.inventory.map((item) => ({ ...item })) };
+    return {
+      ...simulateCombat(attackerCopy, defenderCopy, distance, defenderTerrain, attackerTerrain),
+      attackerInventory: attackerCopy.inventory,
+      defenderInventory: defenderCopy.inventory,
+    };
+  });
 
   // 战斗实时状态
   const [attackerHp, setAttackerHp] = useState(attacker.stats.hp);
@@ -196,30 +202,38 @@ export const CombatArena: React.FC<CombatArenaProps> = ({
     if (hasFinishedRef.current) return;
     hasFinishedRef.current = true;
 
+    // 跳过动画也必须应用完整模拟结果，不能用尚未播放完的血条数值结算。
+    const lastAction = simulationResult.actions.at(-1);
+    const finalAttackerHp = lastAction?.attackerHpRemaining ?? attacker.stats.hp;
+    const finalDefenderHp = lastAction?.defenderHpRemaining ?? defender.stats.hp;
+    const finalExp = attacker.exp + simulationResult.expGained;
+    const finalGain = finalExp >= 100 ? (levelUpGain ?? rollLevelUp(attacker)) : null;
     let updatedAttacker = {
       ...attacker,
-      stats: { ...attacker.stats, hp: attackerHp },
-      exp: expBarCurrent >= 100 ? expBarCurrent - 100 : expBarCurrent,
-      isAlive: attackerHp > 0,
+      stats: { ...attacker.stats, hp: finalAttackerHp },
+      inventory: simulationResult.attackerInventory,
+      exp: finalExp % 100,
+      isAlive: finalAttackerHp > 0,
       hasActed: true,
     };
 
-    if (levelUpGain) {
-      updatedAttacker = applyLevelUp(updatedAttacker, levelUpGain);
+    if (finalGain && updatedAttacker.isAlive) {
+      updatedAttacker = applyLevelUp(updatedAttacker, finalGain);
     }
 
     const updatedDefender = {
       ...defender,
-      stats: { ...defender.stats, hp: defenderHp },
-      isAlive: defenderHp > 0,
+      stats: { ...defender.stats, hp: finalDefenderHp },
+      inventory: simulationResult.defenderInventory,
+      isAlive: finalDefenderHp > 0,
     };
 
     onFinishCombat({
       attacker: updatedAttacker,
       defender: updatedDefender,
-      attackerDied: attackerHp <= 0,
-      defenderDied: defenderHp <= 0,
-      levelUpGain,
+      attackerDied: finalAttackerHp <= 0,
+      defenderDied: finalDefenderHp <= 0,
+      levelUpGain: updatedAttacker.isAlive ? finalGain : null,
     });
   };
 

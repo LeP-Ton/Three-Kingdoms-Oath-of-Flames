@@ -9,6 +9,7 @@ import { getPortraitDataUrl } from '../graphics/pixelAssets';
 import { audio } from '../audio/retroAudio';
 
 export interface SaveSlotData {
+  version: 2;
   slotId: number;
   timestamp: string;
   stageId: string;
@@ -18,6 +19,9 @@ export interface SaveSlotData {
   gold: number;
   party: Unit[];
   leaderPortraitId: string;
+  merit: number;
+  completedStages: string[];
+  casualMode: boolean;
 }
 
 interface SaveLoadModalProps {
@@ -26,11 +30,14 @@ interface SaveLoadModalProps {
   currentTurn: number;
   currentGold: number;
   currentParty: Unit[];
+  merit: number;
+  completedStages: string[];
+  casualMode: boolean;
   onClose: () => void;
   onLoadData: (saveData: SaveSlotData) => void;
 }
 
-const STORAGE_PREFIX = 'sanguo_fire_emblem_slot_';
+const STORAGE_PREFIX = 'sanguo_xuanxiao_v2_slot_';
 
 export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
   mode,
@@ -38,6 +45,9 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
   currentTurn,
   currentGold,
   currentParty,
+  merit,
+  completedStages,
+  casualMode,
   onClose,
   onLoadData,
 }) => {
@@ -50,7 +60,8 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
       try {
         const raw = localStorage.getItem(`${STORAGE_PREFIX}${i}`);
         if (raw) {
-          loadedSlots.push(JSON.parse(raw));
+          const data = JSON.parse(raw);
+          loadedSlots.push(data.version === 2 && Array.isArray(data.party) && Array.isArray(data.completedStages) ? data : null);
         } else {
           loadedSlots.push(null);
         }
@@ -69,15 +80,19 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
     audio.playMenuConfirm();
     const leader = currentParty[0] || { characterId: 'liubei' };
     const saveData: SaveSlotData = {
+      version: 2,
       slotId: slotIndex + 1,
-      timestamp: new Date().toLocaleString(),
+      timestamp: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
       stageId: currentStage.id,
       chapterTitle: currentStage.title,
       stageSubtitle: currentStage.subtitle,
-      turnNumber: currentTurn,
+      turnNumber: 1,
       gold: currentGold,
       party: currentParty,
       leaderPortraitId: leader.characterId,
+      merit,
+      completedStages,
+      casualMode,
     };
 
     localStorage.setItem(`${STORAGE_PREFIX}${slotIndex + 1}`, JSON.stringify(saveData));
@@ -121,6 +136,7 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
         </div>
 
         {/* 5 个存档槽位列表 */}
+        <p className="text-xs text-stone-300 mb-3">记录当前战役的整备起点、战功与直属部队；读取后从战前整备重新部署。</p>
         <div className="space-y-2.5">
           {slots.map((slot, idx) => (
             <div

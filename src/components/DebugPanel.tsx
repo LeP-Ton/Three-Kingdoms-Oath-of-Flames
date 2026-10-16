@@ -1,6 +1,6 @@
 /**
  * 三国志·烈火之誓 - 开发者与测试秘籍控制台 (Debug & Testing Console)
- * 支持 30 关任意跳转、全神兵获取、全满级属性、关卡秒胜与模式切换
+ * 支持 25 关任意跳转、全神兵获取、全满级属性、关卡秒胜与模式切换
  */
 
 import React from 'react';
@@ -139,9 +139,9 @@ export const DebugPanel: React.FC<DebugPanelProps> = ({
           </button>
         </div>
 
-        {/* 30 关自由选关跳转 */}
+        {/* 25 关自由选关跳转 */}
         <div className="flex-1 overflow-y-auto pr-1 gba-scroll border border-stone-800 rounded p-2 bg-stone-950/60">
-          <div className="text-xs text-amber-300 font-bold mb-2">跳转直达全部 30 战役关卡:</div>
+          <div className="text-xs text-amber-300 font-bold mb-2">跳转直达全部 25 场战役关卡:</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs">
             {ALL_STAGES.map((stg) => {
               const isCurrent = stg.id === currentStage.id;

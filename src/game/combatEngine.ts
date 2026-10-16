@@ -130,8 +130,10 @@ export function getCombatForecast(
   defenderTerrain: TerrainType = TerrainType.Plains,
   attackerTerrain: TerrainType = TerrainType.Plains
 ): CombatForecast {
-  const atkWeapon = attacker.inventory[attacker.equippedWeaponIndex] || null;
-  const defWeapon = defender.inventory[defender.equippedWeaponIndex] || null;
+  const equippedAttack = attacker.inventory[attacker.equippedWeaponIndex];
+  const equippedDefence = defender.inventory[defender.equippedWeaponIndex];
+  const atkWeapon = equippedAttack?.uses > 0 ? equippedAttack : null;
+  const defWeapon = equippedDefence?.uses > 0 ? equippedDefence : null;
 
   const atkMetrics = calculateCombatMetrics(attacker, defender, atkWeapon, defWeapon, defenderTerrain);
 
@@ -199,6 +201,7 @@ export function simulateCombat(
     const activeUnit = isAttacker ? attacker : defender;
     const targetUnit = isAttacker ? defender : attacker;
     const activeWeapon = isAttacker ? atkWeapon : defWeapon;
+    if (!activeWeapon || activeWeapon.uses <= 0 || activeWeapon.type === WeaponType.Item || activeWeapon.type === WeaponType.Staff) return;
     const hitRate = isAttacker ? forecast.attackerHit : forecast.defenderHit;
     const critRate = isAttacker ? forecast.attackerCrit : forecast.defenderCrit;
     const baseDamage = isAttacker ? forecast.attackerDamage : forecast.defenderDamage;
@@ -260,7 +263,7 @@ export function simulateCombat(
 
   // 经验值结算
   let expGained = 0;
-  if (attacker.faction === 'player') {
+  if (attacker.faction === 'player' && actions.some((action) => action.isAttacker)) {
     if (curDefHp <= 0) {
       // 击破击杀经验
       const levelDiff = defender.level - attacker.level;

@@ -15,8 +15,10 @@ import {
   WeaponType,
 } from './types';
 import { ALL_STAGES } from './data/stagesData';
-import { INITIAL_PARTY } from './data/charactersData';
-import { ITEMS_DATABASE } from './data/itemsData';
+import { getInitialPartyUnits } from './data/charactersData';
+import { getMilitaryRank, prepareParty, recruitTroop, settleParty } from './data/campaignData';
+import { TECHNOLOGY_ENERGY, TechnologyAbility, useTechnology } from './game/technologyEngine';
+import { getBattleOutcome } from './game/campaignRules';
 import { calculateMovementRange, calculateAttackRange, calculateDangerZone, ReachableTile, getDistance } from './game/pathfinding';
 import { computeAiTurn } from './game/aiEngine';
 import { audio } from './audio/retroAudio';
@@ -53,7 +55,17 @@ export default function App() {
   // 核心游戏状态
   const [mode, setMode] = useState<GameMode>('title');
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
-  const [party, setParty] = useState<Unit[]>(INITIAL_PARTY);
+  const [party, setParty] = useState<Unit[]>(getInitialPartyUnits);
+  const [merit, setMerit] = useState(0);
+  const [completedStages, setCompletedStages] = useState<string[]>([]);
+  const [technologyEnergy, setTechnologyEnergy] = useState(TECHNOLOGY_ENERGY);
+  const [technologyAbility, setTechnologyAbility] = useState<TechnologyAbility | null>(null);
+  const [visitedVillages, setVisitedVillages] = useState<string[]>([]);
+  const resolutionRef = useRef(false);
+  const rewardedRef = useRef(false);
+  const generationRef = useRef(0);
+  const stageStartPartyRef = useRef<Unit[]>(getInitialPartyUnits());
+  const stageStartGoldRef = useRef(1200);
   const [gold, setGold] = useState(1200);
   const [casualMode, setCasualMode] = useState(false); // 经典/轻松模式
 
@@ -61,7 +73,7 @@ export default function App() {
   const currentStage: StageConfig = ALL_STAGES[currentStageIndex] || ALL_STAGES[0];
   const [battleUnits, setBattleUnits] = useState<Unit[]>([]);
   const [currentTurn, setCurrentTurn] = useState(1);
-  const [phase, setPhase] = useState<'player' | 'enemy'>('player');
+  const [phase, setPhase] = useState<'player' | 'ally' | 'enemy'>('player');
   const [phaseBanner, setPhaseBanner] = useState<string | null>(null);
 
   // 战棋光标与选择状态
@@ -110,11 +122,21 @@ export default function App() {
 
   // 启动新战役章节
   const initStage = useCallback((stageToLoad: StageConfig, deployedParty: Unit[] = party) => {
+    generationRef.current++;
+    resolutionRef.current = false;
+    rewardedRef.current = false;
+    stageStartPartyRef.current = structuredClone(party);
+    stageStartGoldRef.current = gold;
+    setTechnologyEnergy(TECHNOLOGY_ENERGY);
+    setTechnologyAbility(null);
+    setVisitedVillages([]);
+    setActiveCombat(null);
+    setLevelUpData(null);
     // 部署玩家选派的武将
     const placedPlayerUnits: Unit[] = [];
     const spawnPoints = stageToLoad.playerSpawnPoints;
 
-    deployedParty.slice(0, spawnPoints.length).forEach((unit, idx) => {
+    prepareParty(deployedParty).slice(0, spawnPoints.length).forEach((unit, idx) => {
       const sp = spawnPoints[idx];
       placedPlayerUnits.push({
         ...unit,
@@ -127,8 +149,9 @@ export default function App() {
     });
 
     // 载入敌军
-    const enemies = stageToLoad.enemyUnits.map((e) => ({ ...e, isAlive: true, hasActed: false }));
-    const all = [...placedPlayerUnits, ...enemies];
+    const enemies = structuredClone(stageToLoad.enemyUnits);
+    const allies = structuredClone(stageToLoad.allyUnits ?? []);
+    const all = [...placedPlayerUnits, ...allies, ...enemies];
 
     setBattleUnits(all);
     setCurrentTurn(1);
@@ -140,7 +163,7 @@ export default function App() {
     setAttackRange(new Set());
     setCursorPos({ x: placedPlayerUnits[0]?.x || 1, y: placedPlayerUnits[0]?.y || 1 });
 
-    refreshDangerZone(all);
+    setDangerZone(calculateDangerZone(enemies, stageToLoad.mapWidth, stageToLoad.mapHeight, stageToLoad.terrainGrid, all));
 
     // 播放战前剧情对话
     if (stageToLoad.preBattleDialogue && stageToLoad.preBattleDialogue.length > 0) {
@@ -148,13 +171,13 @@ export default function App() {
       setActiveDialogue(stageToLoad.preBattleDialogue);
       setOnDialogueFinishCallback(() => () => {
         setMode('battle');
-        triggerPhaseBanner('PLAYER PHASE');
+        triggerPhaseBanner('玄霄军行动');
       });
     } else {
       setMode('battle');
-      triggerPhaseBanner('PLAYER PHASE');
+      triggerPhaseBanner('玄霄军行动');
     }
-  }, [party, refreshDangerZone]);
+  }, [party, gold, refreshDangerZone]);
 
   // 回合横幅提示
   const triggerPhaseBanner = (text: string) => {
@@ -166,52 +189,46 @@ export default function App() {
   };
 
   // 检查胜利与失败判定
-  const checkBattleCondition = useCallback(
-    (currentUnits: Unit[], turn: number) => {
-      const alivePlayers = currentUnits.filter((u) => u.isAlive && u.faction === Faction.Player);
-      const aliveEnemies = currentUnits.filter((u) => u.isAlive && u.faction === Faction.Enemy);
-
-      // 失败：主将阵亡
-      const protagonist = alivePlayers.find((u) => u.characterId === 'protagonist' || u.characterId === 'liubei');
-      if (!protagonist || alivePlayers.length === 0) {
+  const checkBattleCondition = (currentUnits: Unit[], turn: number): boolean => {
+      if (resolutionRef.current) return true;
+      const outcome = getBattleOutcome(currentStage, currentUnits, turn);
+      if (outcome === 'defeat') {
         audio.playGameOver();
         setMode('game_over');
-        return;
+        resolutionRef.current = true;
+        return true;
       }
 
-      // 胜利判定：
-      let isVictory = false;
-
-      if (currentStage.victoryCondition === VictoryCondition.Rout && aliveEnemies.length === 0) {
-        isVictory = true;
-      } else if (currentStage.victoryCondition === VictoryCondition.DefeatBoss) {
-        const bossAlive = aliveEnemies.some((u) => u.isBoss);
-        if (!bossAlive) isVictory = true;
-      } else if (currentStage.victoryCondition === VictoryCondition.Survive) {
-        if (turn >= (currentStage.surviveTurns || 6)) {
-          isVictory = true;
-        }
-      }
+      const isVictory = outcome === 'victory';
 
       if (isVictory) {
+        resolutionRef.current = true;
         audio.playVictory();
         if (currentStage.postBattleDialogue && currentStage.postBattleDialogue.length > 0) {
           setMode('dialogue');
           setActiveDialogue(currentStage.postBattleDialogue);
           setOnDialogueFinishCallback(() => () => {
-            handleStageVictoryFinish();
+            handleStageVictoryFinish(currentUnits);
           });
         } else {
-          handleStageVictoryFinish();
+          handleStageVictoryFinish(currentUnits);
         }
       }
-    },
-    [currentStage]
-  );
+      return isVictory;
+  };
 
   // 关卡胜利结算
-  const handleStageVictoryFinish = () => {
-    setGold((prev) => prev + 1500);
+  const handleStageVictoryFinish = (units: Unit[] = battleUnits) => {
+    if (rewardedRef.current) return;
+    rewardedRef.current = true;
+    resolutionRef.current = true;
+    generationRef.current++;
+    setParty((previous) => settleParty(previous, units, casualMode));
+    if (!completedStages.includes(currentStage.id)) {
+      setGold((prev) => prev + 1500);
+      setMerit((prev) => prev + currentStage.meritReward);
+      setCompletedStages((prev) => [...prev, currentStage.id]);
+    }
 
     if (currentStageIndex >= ALL_STAGES.length - 1 || currentStage.id === 'stage_5_5') {
       setMode('victory_ending');
@@ -235,6 +252,21 @@ export default function App() {
   // 玩家棋盘交互逻辑
   const handleTileClick = (tx: number, ty: number) => {
     if (phase !== 'player' || mode !== 'battle') return;
+    if (technologyAbility) {
+      const target = battleUnits.find((unit) => unit.isAlive && unit.x === tx && unit.y === ty);
+      const result = target && useTechnology(battleUnits, technologyEnergy, technologyAbility, target.id);
+      if (!result) { audio.playMenuCancel(); return; }
+      setBattleUnits(result.units);
+      setTechnologyEnergy(result.energy);
+      setTechnologyAbility(null);
+      setSelectedUnit(null);
+      setActionMenu(null);
+      setMovementRange(new Map());
+      setAttackRange(new Set());
+      refreshDangerZone(result.units);
+      if (!checkBattleCondition(result.units, currentTurn)) checkTurnEnd(result.units);
+      return;
+    }
 
     // 1. 如果处于攻击目标选取状态
     if (targetingEnemies.length > 0 && selectedUnit) {
@@ -320,7 +352,7 @@ export default function App() {
           const options: ('attack' | 'staff' | 'item' | 'visit' | 'seize' | 'wait' | 'cancel')[] = [];
 
           // 检查攻击范围内是否有存活敌军
-          if (weapon && weapon.type !== WeaponType.Item && weapon.type !== WeaponType.Staff) {
+          if (weapon && weapon.uses > 0 && weapon.type !== WeaponType.Item && weapon.type !== WeaponType.Staff) {
             const enemiesInRange = battleUnits.filter((e) => {
               if (!e.isAlive || e.faction !== Faction.Enemy) return false;
               const d = getDistance(tx, ty, e.x, e.y);
@@ -332,20 +364,20 @@ export default function App() {
           }
 
           // 检查是否有可用消耗道具
-          const hasUsableItem = movedUnit.inventory.some((it) => it.type === WeaponType.Item);
+          const hasUsableItem = movedUnit.inventory.some((it) => it.type === WeaponType.Item && it.uses > 0 && it.healAmount);
           if (hasUsableItem) {
             options.push('item');
           }
 
           // 检查访问村庄事件
           const terrain = currentStage.terrainGrid[ty]?.[tx];
-          if (terrain === TerrainType.Village) {
+          if (terrain === TerrainType.Village && !visitedVillages.includes(`${tx},${ty}`)) {
             options.push('visit');
           }
 
           // 检查制压
           if (
-            (terrain === TerrainType.Throne || terrain === TerrainType.Gate || terrain === TerrainType.Castle) &&
+            tx === currentStage.seizeTarget?.x && ty === currentStage.seizeTarget?.y &&
             currentStage.victoryCondition === VictoryCondition.Seize
           ) {
             options.push('seize');
@@ -391,7 +423,7 @@ export default function App() {
       setBattleUnits(updatedUnits);
       setSelectedUnit(null);
       setActionMenu(null);
-      checkTurnEnd(updatedUnits);
+      if (!checkBattleCondition(updatedUnits, currentTurn)) checkTurnEnd(updatedUnits);
       return;
     }
 
@@ -412,6 +444,8 @@ export default function App() {
     }
 
     if (action === 'visit') {
+      if (visitedVillages.includes(`${x},${y}`)) return;
+      setVisitedVillages((prev) => [...prev, `${x},${y}`]);
       audio.playLevelUp();
       const villageEvent = currentStage.events?.find(
         (ev) => ev.trigger === 'visit_village' && ev.villageX === x && ev.villageY === y
@@ -428,6 +462,7 @@ export default function App() {
           setActiveDialogue(villageEvent.dialogue);
           setOnDialogueFinishCallback(() => () => {
             setMode('battle');
+            checkTurnEnd(updatedUnits);
           });
         }
       }
@@ -435,23 +470,29 @@ export default function App() {
       setBattleUnits(updatedUnits);
       setSelectedUnit(null);
       setActionMenu(null);
-      checkTurnEnd(updatedUnits);
+      if (!villageEvent?.dialogue?.length) checkTurnEnd(updatedUnits);
       return;
     }
 
     if (action === 'seize') {
+      if (x !== currentStage.seizeTarget?.x || y !== currentStage.seizeTarget?.y) return;
+      resolutionRef.current = true;
       audio.playVictory();
-      handleStageVictoryFinish();
+      setSelectedUnit(null);
+      setActionMenu(null);
+      setMode('dialogue');
+      setActiveDialogue(currentStage.postBattleDialogue);
+      setOnDialogueFinishCallback(() => () => handleStageVictoryFinish(battleUnits));
       return;
     }
 
     if (action === 'item') {
       // 快速使用药水
       audio.playItemUse();
-      const itemIdx = unit.inventory.findIndex((it) => it.type === WeaponType.Item);
+      const itemIdx = unit.inventory.findIndex((it) => it.type === WeaponType.Item && it.uses > 0 && it.healAmount);
       if (itemIdx >= 0) {
         const item = unit.inventory[itemIdx];
-        const healedHp = Math.min(unit.stats.maxHp, unit.stats.hp + 20);
+        const healedHp = Math.min(unit.stats.maxHp, unit.stats.hp + (item.healAmount ?? 10));
         item.uses -= 1;
         if (item.uses <= 0) {
           unit.inventory.splice(itemIdx, 1);
@@ -462,7 +503,7 @@ export default function App() {
         setBattleUnits(updatedUnits);
         setSelectedUnit(null);
         setActionMenu(null);
-        checkTurnEnd(updatedUnits);
+        if (!checkBattleCondition(updatedUnits, currentTurn)) checkTurnEnd(updatedUnits);
       }
       return;
     }
@@ -485,121 +526,91 @@ export default function App() {
       return u;
     });
 
-    if (result.attackerDied && !casualMode && result.attacker.faction === Faction.Player) {
-      // 经典模式战死永久移出我方
-      setParty((prev) => prev.filter((p) => p.id !== result.attacker.id));
-    }
-    if (result.defenderDied && !casualMode && result.defender.faction === Faction.Player) {
-      setParty((prev) => prev.filter((p) => p.id !== result.defender.id));
-    }
-
     setBattleUnits(nextUnits);
     refreshDangerZone(nextUnits);
+    setSelectedUnit(null);
+    setActionMenu(null);
+    setMovementRange(new Map());
+    setAttackRange(new Set());
+    if (result.levelUpGain) setLevelUpData({ unit: result.attacker, gain: result.levelUpGain });
+    if (checkBattleCondition(nextUnits, currentTurn)) return;
+    if (phase === 'player') checkTurnEnd(nextUnits);
+    else void runAiSequence(phase, nextUnits, generationRef.current);
+  };
 
-    if (result.levelUpGain) {
-      setLevelUpData({ unit: result.attacker, gain: result.levelUpGain });
-    }
-
-    // 检查关卡胜负
-    checkBattleCondition(nextUnits, currentTurn);
-
-    // 若依然在玩家回合，检查全员是否都已行动
-    if (phase === 'player') {
-      checkTurnEnd(nextUnits);
+  const checkTurnEnd = (units: Unit[]) => {
+    if (resolutionRef.current) return;
+    if (!units.some((unit) => unit.isAlive && unit.faction === Faction.Player && !unit.hasActed)) {
+      startAiPhase('ally', units);
     }
   };
 
-  // 检查己方回合是否全员行动完毕
-  const checkTurnEnd = (currentUnits: Unit[]) => {
-    const unactedPlayers = currentUnits.filter(
-      (u) => u.isAlive && u.faction === Faction.Player && !u.hasActed
-    );
-    if (unactedPlayers.length === 0) {
-      // 开启敌方阶段
-      startEnemyPhase(currentUnits);
-    }
-  };
-
-  // 切换至敌方行动阶段
-  const startEnemyPhase = (unitsBeforeAi: Unit[]) => {
-    setPhase('enemy');
-    triggerPhaseBanner('ENEMY PHASE');
-
-    // 延迟逐个执行敌方 AI 行动
+  const startAiPhase = (nextPhase: 'ally' | 'enemy', units: Unit[]) => {
+    if (resolutionRef.current) return;
+    const generation = generationRef.current;
+    setPhase(nextPhase);
+    setSelectedUnit(null);
+    setActionMenu(null);
+    setTargetingEnemies([]);
+    setTechnologyAbility(null);
+    setMovementRange(new Map());
+    setAttackRange(new Set());
+    triggerPhaseBanner(nextPhase === 'ally' ? '友军名将行动' : '敌军行动');
     setTimeout(() => {
-      runEnemyAiSequence(unitsBeforeAi);
+      if (generation === generationRef.current && !resolutionRef.current) void runAiSequence(nextPhase, units, generation);
     }, 1200);
   };
 
-  // 顺序执行敌兵 AI 战术决策
-  const runEnemyAiSequence = async (initialUnits: Unit[]) => {
-    let currentUnits = [...initialUnits];
-    const enemies = currentUnits.filter((u) => u.isAlive && u.faction === Faction.Enemy);
-
-    for (const enemy of enemies) {
-      // 再次确认敌兵依然存活
-      const latestEnemy = currentUnits.find((u) => u.id === enemy.id && u.isAlive);
-      if (!latestEnemy) continue;
-
-      const aiAction = computeAiTurn(
-        latestEnemy,
-        currentStage.mapWidth,
-        currentStage.mapHeight,
-        currentStage.terrainGrid,
-        currentUnits
-      );
-
-      // 移动至目的地
-      latestEnemy.x = aiAction.destination.x;
-      latestEnemy.y = aiAction.destination.y;
-      latestEnemy.hasActed = true;
-
-      currentUnits = currentUnits.map((u) => (u.id === latestEnemy.id ? latestEnemy : u));
-      setBattleUnits([...currentUnits]);
-
-      // 若决定发动攻击
-      if (aiAction.actionType === 'attack' && aiAction.targetUnit) {
-        const dist = getDistance(latestEnemy.x, latestEnemy.y, aiAction.targetUnit.x, aiAction.targetUnit.y);
-        setActiveCombat({ attacker: latestEnemy, defender: aiAction.targetUnit, distance: dist });
+  // 每次交锋结束后从未行动单位继续，避免动画中断导致敌军或友军回合停滞。
+  const runAiSequence = async (activePhase: 'ally' | 'enemy', initialUnits: Unit[], generation: number) => {
+    let units = [...initialUnits];
+    const faction = activePhase === 'ally' ? Faction.Ally : Faction.Enemy;
+    const actors = units.filter((unit) => unit.isAlive && unit.faction === faction && !unit.hasActed);
+    for (const actor of actors) {
+      if (generation !== generationRef.current || resolutionRef.current) return;
+      const latest = units.find((unit) => unit.id === actor.id && unit.isAlive && !unit.hasActed);
+      if (!latest) continue;
+      const action = computeAiTurn(latest, currentStage.mapWidth, currentStage.mapHeight, currentStage.terrainGrid, units);
+      const targetId = action.targetUnit?.id;
+      const moved = { ...latest, ...action.destination, hasActed: true };
+      units = units.map((unit) => unit.id === moved.id ? moved : unit);
+      setBattleUnits(units);
+      if (action.actionType === 'attack' && targetId) {
+        const target = units.find((unit) => unit.id === targetId)!;
+        setActiveCombat({ attacker: moved, defender: target, distance: getDistance(moved.x, moved.y, target.x, target.y) });
         setMode('combat_duel');
-        return; // 交由 CombatArena 处理，并在结束后恢复
+        return;
       }
-
-      // 等待 250ms 模拟思考走位
+      if (action.actionType === 'heal' && targetId) {
+        const staff = moved.inventory[moved.equippedWeaponIndex];
+        units = units.map((unit) => unit.id === targetId
+          ? { ...unit, stats: { ...unit.stats, hp: Math.min(unit.stats.maxHp, unit.stats.hp + (staff.healAmount ?? 10) + moved.stats.mag) } }
+          : unit.id === moved.id ? { ...unit, inventory: unit.inventory.map((item, index) => index === unit.equippedWeaponIndex ? { ...item, uses: Math.max(0, item.uses - 1) } : item) } : unit);
+        setBattleUnits(units);
+      }
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
-
-    // 敌方全部行动完毕，交还玩家回合
-    endEnemyPhase(currentUnits);
+    if (generation !== generationRef.current || resolutionRef.current) return;
+    if (checkBattleCondition(units, currentTurn)) return;
+    if (activePhase === 'ally') startAiPhase('enemy', units);
+    else endEnemyPhase(units);
   };
 
-  // 结束敌方回合，恢复玩家行动
-  const endEnemyPhase = (finalUnits: Unit[]) => {
+  const endEnemyPhase = (units: Unit[]) => {
     const nextTurn = currentTurn + 1;
+    const refreshed = units.map((unit) => ({ ...unit, hasActed: false }));
+    setBattleUnits(refreshed);
     setCurrentTurn(nextTurn);
-
-    // 重置我方与敌方行动标志
-    const refreshedUnits = finalUnits.map((u) => ({
-      ...u,
-      hasActed: false,
-    }));
-
-    setBattleUnits(refreshedUnits);
     setPhase('player');
-    refreshDangerZone(refreshedUnits);
-    triggerPhaseBanner(`PLAYER PHASE · 第 ${nextTurn} 回合`);
-
-    // 检查坚持回合关卡
-    checkBattleCondition(refreshedUnits, nextTurn);
+    refreshDangerZone(refreshed);
+    if (!checkBattleCondition(refreshed, nextTurn)) triggerPhaseBanner(`玄霄军行动 · 第${nextTurn}回合`);
   };
 
-  // 手动结束己方回合按钮
   const handleManualEndTurn = () => {
     if (phase !== 'player' || mode !== 'battle') return;
     audio.playMenuConfirm();
-    startEnemyPhase(battleUnits);
+    startAiPhase('ally', battleUnits);
   };
-
   // 键盘快捷键监听
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -641,7 +652,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cursorPos, mode, actionMenu, currentStage]);
+  }, [cursorPos, mode, actionMenu, currentStage, phase, battleUnits, selectedUnit, movementRange, targetingEnemies, technologyAbility, technologyEnergy, visitedVillages, originalUnitPos]);
 
   return (
     <div id="game-root" className="relative w-screen h-screen overflow-hidden bg-stone-950 text-stone-100 flex flex-col font-sans scanlines">
@@ -659,19 +670,21 @@ export default function App() {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
               <div className="absolute bottom-2 left-3 right-3 flex items-center justify-between text-[11px] font-mono text-amber-300/90 drop-shadow">
-                <span>GBA FIRE EMBLEM ENGINE</span>
-                <span>CHAPTER 1 - 30 COMPLETE SAGA</span>
+                <span>玄霄 · 未来科技入三国</span>
+                <span>演义主线 · 25场战役任务</span>
               </div>
             </div>
 
             <div className="text-xs md:text-sm font-bold tracking-widest text-amber-500 uppercase mb-1">
-              GBA FIRE EMBLEM TACTICAL SRPG · 三国志题材经典战棋
+              未来穿越 · 科技战棋 · 名将协同
             </div>
             <h1 className="text-3xl md:text-5xl font-black text-amber-400 pixel-font tracking-wider drop-shadow-2xl mb-3">
               三国志 · 烈火之誓
             </h1>
             <p className="text-stone-300 text-xs md:text-sm leading-relaxed mb-5 max-w-xl mx-auto">
-              桃园一拜，天下云飞。承袭 GBA 火焰纹章纯正战棋血脉，30 大历史战役、武器三角相克、攻速追击与历代名将收服！
+              你是从未来穿越而来的玄霄，初入乱世，孤身无兵。
+              操作科技装备，与自主行动的三国名将并肩作战；积累战功、晋升军职、招揽部曲，助刘备逐鹿三国。
+              主线遵循《三国演义》，英雄的抉择与结局依旧。
             </p>
 
             {/* 名将头像展示廊 (三国群英像素立绘预览 - 移动端顺滑横滑) */}
@@ -710,11 +723,18 @@ export default function App() {
                   } catch (err) {
                     console.warn(err);
                   }
+                  generationRef.current++;
+                  setCurrentStageIndex(0);
+                  setParty(getInitialPartyUnits());
+                  setMerit(0);
+                  setCompletedStages([]);
+                  setGold(1200);
+                  setBattleUnits([]);
                   setMode('prep');
                 }}
                 className="w-full sm:w-auto px-6 py-3 gba-btn font-bold text-base text-amber-100 tracking-widest cursor-pointer shadow-xl active:scale-95 min-h-[44px]"
               >
-                征战起兵 (开局)
+                玄霄入世 · 开始
               </button>
               <button
                 id="load-game-btn"
@@ -748,7 +768,7 @@ export default function App() {
             </div>
 
             <div className="mt-5 text-xs text-stone-400 flex items-center justify-center space-x-4">
-              <span>关卡总量: 30 关 (25 主线 + 5 隐藏)</span>
+              <span>25场任务 · 初始无下属 · 战功晋升</span>
               <span>•</span>
               <span>三国纯正像素美术与复古和弦引擎</span>
             </div>
@@ -759,9 +779,16 @@ export default function App() {
       {/* 2. 战前整备界面 (Prep Screen) */}
       {mode === 'prep' && (
         <PrepScreen
+          key={currentStage.id}
           stage={currentStage}
           party={party}
           gold={gold}
+          merit={merit}
+          onSave={() => setSaveLoadMode('save')}
+          onRecruit={(typeId) => {
+            const result = recruitTroop(party, merit, gold, typeId, currentStage.chapterNumber);
+            if (result) { setParty(result.party); setGold(result.gold); }
+          }}
           onUpdateParty={setParty}
           onUpdateGold={setGold}
           onStartBattle={(selectedUnits) => {
@@ -784,10 +811,12 @@ export default function App() {
               </span>
               <span
                 className={`font-bold px-1.5 py-0.5 rounded text-[10px] sm:text-xs ${
-                  phase === 'player' ? 'bg-blue-900/90 text-blue-200 border border-blue-400' : 'bg-red-900/90 text-red-200 border border-red-400'
+                  phase === 'player' ? 'bg-blue-900/90 text-blue-200 border border-blue-400'
+                    : phase === 'ally' ? 'bg-emerald-900/90 text-emerald-200 border border-emerald-400'
+                    : 'bg-red-900/90 text-red-200 border border-red-400'
                 }`}
               >
-                {phase === 'player' ? '我军回合' : '敌军回合'}
+                {phase === 'player' ? '玄霄军行动' : phase === 'ally' ? '友军行动' : '敌军行动'}
               </span>
             </div>
 
@@ -849,6 +878,19 @@ export default function App() {
               </button>
             </div>
           </header>
+
+          <div className="px-3 py-2 bg-stone-950 text-xs border-b border-stone-700 flex flex-wrap items-center gap-2">
+            <span className="text-amber-200">{currentStage.subtitle} · {currentStage.objective}</span>
+            <span className="text-cyan-200">终端能量 {technologyEnergy}/{TECHNOLOGY_ENERGY}</span>
+            {(['first_aid', 'pulse'] as const).map((ability) => (
+              <button key={ability} disabled={phase !== 'player' || mode !== 'battle' || technologyEnergy < 2 || !battleUnits.some((unit) => unit.characterId === 'protagonist' && unit.isAlive && !unit.hasActed)}
+                onClick={() => setTechnologyAbility(technologyAbility === ability ? null : ability)}
+                className={`px-2 py-1 border rounded cursor-pointer disabled:opacity-40 ${technologyAbility === ability ? 'border-cyan-300 bg-cyan-900' : 'border-stone-600'}`}>
+                {ability === 'first_aid' ? '纳米急救 +15' : '脉冲压制 -8'} · 2能量
+              </button>
+            ))}
+            {technologyAbility && <span className="text-cyan-300">点击玄霄三格内的{technologyAbility === 'first_aid' ? '受伤己方或友军' : '敌军'}；消耗玄霄行动。再次点按钮取消。</span>}
+          </div>
 
           {/* 阶段大横幅提示 */}
           {phaseBanner && (
@@ -994,6 +1036,7 @@ export default function App() {
       {/* 5. GBA 1v1 格斗特写战斗视窗 (Combat Duel Arena) */}
       {mode === 'combat_duel' && activeCombat && (
         <CombatArena
+          key={`${currentTurn}_${activeCombat.attacker.id}_${activeCombat.defender.id}`}
           attacker={activeCombat.attacker}
           defender={activeCombat.defender}
           distance={activeCombat.distance}
@@ -1012,15 +1055,15 @@ export default function App() {
         />
       )}
 
-      {/* 7. 关卡大捷通关结算 (Stage Clear Screen) */}
+      {/* 任务结算以局部目标为准，撤退任务不能写成历史战役大捷。 */}
       {mode === 'stage_clear' && (
         <div id="stage-clear-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xs p-4 select-none">
           <div className="gba-window w-full max-w-lg p-6 rounded-md border-4 border-amber-400 text-center shadow-2xl animate-scale-up">
             <h2 className="text-3xl font-black text-amber-300 pixel-font tracking-widest mb-2">
-              ★ 战 役 大 捷 ★
+              ★ 任 务 达 成 ★
             </h2>
             <div className="text-sm font-bold text-amber-200/90 mb-4">
-              {currentStage.title} · {currentStage.subtitle} 功成奏凯！
+              {currentStage.title} · {currentStage.subtitle}
             </div>
             <div className="p-4 bg-stone-900 rounded border border-amber-500/30 text-xs space-y-2 mb-6 font-mono">
               <div className="flex justify-between">
@@ -1028,9 +1071,11 @@ export default function App() {
                 <span className="text-amber-300 font-bold">{currentTurn} 回合</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-stone-300">击破敌军:</span>
-                <span className="text-amber-300 font-bold">已肃清战场</span>
+                <span className="text-stone-300">任务结果:</span>
+                <span className="text-amber-300 font-bold">局部任务完成</span>
               </div>
+              <div className="text-cyan-200">战功 +{currentStage.meritReward} · 当前{getMilitaryRank(merit).name} · 可统领{getMilitaryRank(merit).capacity}支部队</div>
+              <p className="text-stone-300 leading-relaxed">{currentStage.historicalNote}</p>
               <div className="flex justify-between">
                 <span className="text-stone-300">赏金入库:</span>
                 <span className="text-green-400 font-bold">+1500 金</span>
@@ -1078,23 +1123,23 @@ export default function App() {
         </div>
       )}
 
-      {/* 9. 真·大团圆终局通关画面 (Victory Ending Screen) */}
+      {/* 演义终章与三分归晋的后世尾声。 */}
       {mode === 'victory_ending' && (
         <div id="victory-ending-screen" className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950 p-6 select-none overflow-y-auto">
           <div className="max-w-2xl text-center space-y-6 animate-fade-in">
             <h2 className="text-4xl md:text-5xl font-black text-amber-400 pixel-font tracking-widest">
-              天 下 归 一
+              烈 火 留 誓
             </h2>
             <p className="text-sm md:text-base text-amber-200/90 leading-relaxed">
-              三十战役，金戈铁马，关山万里尽归王道。
+              玄霄的征程止于五丈秋风，后世的史卷仍继续展开。
               <br />
-              黄巾平、群雄服、赤壁焰、蜀道开、英灵定。
+              诸葛亮病逝，姜维继志；蜀汉终亡，魏为晋代，东吴亦降，三分归晋。
               <br />
-              汉室重光，万民安居，三国纷争终告尘埃落定！
+              你未能替英雄改写归宿，却在乱世里护住了一些人，守住了与玄德同行的誓言。
             </p>
             <div className="p-4 bg-stone-900/80 rounded-md border border-amber-500/40 text-xs text-stone-300 space-y-2">
-              <div className="text-amber-300 font-bold">通关达成率: 100% · 英雄全员归一</div>
-              <div>感谢体验《三国志·烈火之誓》全量战棋世界！</div>
+              <div className="text-amber-300 font-bold">完成任务 {completedStages.length}/{ALL_STAGES.length} · 战功 {merit} · {getMilitaryRank(merit).name}</div>
+              <div>感谢体验《三国志·烈火之誓》玄霄征程。</div>
             </div>
             <button
               onClick={() => setMode('title')}
@@ -1112,16 +1157,25 @@ export default function App() {
           mode={saveLoadMode}
           currentStage={currentStage}
           currentTurn={currentTurn}
-          currentGold={gold}
-          currentParty={party}
+          currentGold={mode === 'prep' ? gold : stageStartGoldRef.current}
+          currentParty={mode === 'prep' ? party : stageStartPartyRef.current}
+          merit={merit}
+          completedStages={completedStages}
+          casualMode={casualMode}
           onClose={() => setSaveLoadMode(null)}
           onLoadData={(data: SaveSlotData) => {
-            const stg = ALL_STAGES.find((s) => s.id === data.stageId) || ALL_STAGES[0];
             const idx = ALL_STAGES.findIndex((s) => s.id === data.stageId);
             if (idx >= 0) setCurrentStageIndex(idx);
             setParty(data.party);
             setGold(data.gold);
-            initStage(stg, data.party);
+            setMerit(data.merit);
+            setCompletedStages(data.completedStages);
+            setCasualMode(data.casualMode);
+            generationRef.current++;
+            resolutionRef.current = true;
+            setActiveCombat(null);
+            setActiveDialogue(null);
+            setMode('prep');
           }}
         />
       )}
@@ -1139,7 +1193,7 @@ export default function App() {
             if (idx >= 0) setCurrentStageIndex(idx);
             initStage(stg);
           }}
-          onWinStage={handleStageVictoryFinish}
+          onWinStage={() => handleStageVictoryFinish()}
           onUpdateParty={setParty}
           onUpdateGold={setGold}
           onToggleCasualMode={() => setCasualMode((prev) => !prev)}

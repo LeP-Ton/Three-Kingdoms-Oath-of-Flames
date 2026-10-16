@@ -8,22 +8,29 @@ import { Unit, Item, StageConfig, WeaponType } from '../types';
 import { ITEMS_DATABASE } from '../data/itemsData';
 import { getPortraitDataUrl } from '../graphics/pixelAssets';
 import { audio } from '../audio/retroAudio';
+import { getMilitaryRank, MILITARY_RANKS, TROOP_TYPES } from '../data/campaignData';
 
 interface PrepScreenProps {
   stage: StageConfig;
   party: Unit[];
   gold: number;
+  merit: number;
+  onRecruit: (typeId: string) => void;
+  onSave: () => void;
   onUpdateParty: (newParty: Unit[]) => void;
   onUpdateGold: (newGold: number) => void;
   onStartBattle: (selectedUnits: Unit[]) => void;
 }
 
-type TabType = 'deploy' | 'shop' | 'inventory' | 'arena' | 'support';
+type TabType = 'deploy' | 'recruit' | 'shop' | 'inventory' | 'arena' | 'support';
 
 export const PrepScreen: React.FC<PrepScreenProps> = ({
   stage,
   party,
   gold,
+  merit,
+  onRecruit,
+  onSave,
   onUpdateParty,
   onUpdateGold,
   onStartBattle,
@@ -32,7 +39,11 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>(() =>
     party.slice(0, stage.playerSpawnPoints.length).map((u) => u.id)
   );
-  const [focusedUnit, setFocusedUnit] = useState<Unit>(party[0] || null);
+  const [focusedUnitId, setFocusedUnitId] = useState(party[0]?.id);
+  const focusedUnit = party.find((unit) => unit.id === focusedUnitId) ?? party[0];
+  const militaryRank = getMilitaryRank(merit);
+  const subordinateCount = party.filter((unit) => unit.characterId !== 'protagonist').length;
+  const nextRank = MILITARY_RANKS.find((rank) => rank.merit > merit);
 
   // 竞技场状态
   const [arenaBet, setArenaBet] = useState(100);
@@ -41,6 +52,7 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
   const maxDeploy = stage.playerSpawnPoints.length;
 
   const toggleDeploy = (unitId: string) => {
+    if (party.find((unit) => unit.id === unitId)?.characterId === 'protagonist') return;
     audio.playMenuConfirm();
     if (selectedUnitIds.includes(unitId)) {
       if (selectedUnitIds.length > 1) {
@@ -78,7 +90,7 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
 
     const newParty = party.map((u) => (u.id === focusedUnit.id ? updatedUnit : u));
     onUpdateParty(newParty);
-    setFocusedUnit(updatedUnit);
+    setFocusedUnitId(updatedUnit.id);
   };
 
   // 竞技场赌战结算
@@ -108,7 +120,7 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
 
   const handleStart = () => {
     audio.playMenuConfirm();
-    const deployed = party.filter((u) => selectedUnitIds.includes(u.id));
+    const deployed = party.filter((u) => u.characterId === 'protagonist' || selectedUnitIds.includes(u.id));
     onStartBattle(deployed);
   };
 
@@ -126,6 +138,8 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
           <span className="text-amber-400 font-bold bg-stone-900/90 px-2.5 py-1 rounded border border-amber-500/40">
             💰 军资: {gold} 金
           </span>
+          <span className="text-cyan-200">{militaryRank.name} · 战功 {merit} · 部队 {subordinateCount}/{militaryRank.capacity}</span>
+          <button onClick={onSave} className="gba-btn px-3 py-2 text-xs cursor-pointer">存档</button>
           <button
             id="start-chapter-btn"
             onClick={handleStart}
@@ -140,10 +154,11 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
       <nav className="flex space-x-1 px-2 sm:px-4 pt-2 bg-[#140e0a] border-b border-amber-600/40 overflow-x-auto whitespace-nowrap scrollbar-none">
         {[
           { id: 'deploy', label: '出击编成' },
+          { id: 'recruit', label: '战功招兵' },
           { id: 'inventory', label: '物品装备' },
           { id: 'shop', label: '随军商铺' },
           { id: 'arena', label: '军中校场' },
-          { id: 'support', label: '名将情谊' },
+          { id: 'support', label: '友军协同' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -167,7 +182,7 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
         {/* 左侧人员名单 */}
         <div className="w-full md:w-80 flex flex-col gba-box p-3 rounded-md overflow-hidden max-h-60 md:max-h-none flex-shrink-0">
           <div className="text-xs text-amber-300 font-bold mb-2 flex justify-between">
-            <span>全军将领 ({party.length})</span>
+            <span>玄霄与直属部队 ({party.length})</span>
             <span>已选: {selectedUnitIds.length} / {maxDeploy}</span>
           </div>
           <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 gba-scroll">
@@ -178,7 +193,7 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
                 <div
                   key={unit.id}
                   onClick={() => {
-                    setFocusedUnit(unit);
+                    setFocusedUnitId(unit.id);
                     audio.playMenuConfirm();
                   }}
                   className={`flex items-center justify-between p-2 rounded cursor-pointer border transition-all ${
@@ -214,7 +229,7 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
                         : 'bg-stone-800 border-stone-600 text-stone-400 hover:text-stone-200'
                     }`}
                   >
-                    {isSelected ? '出击' : '休整'}
+                    {unit.characterId === 'protagonist' ? '必出' : isSelected ? '出击' : '休整'}
                   </button>
                 </div>
               );
@@ -224,8 +239,14 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
 
         {/* 右侧面板详情 */}
         <div className="flex-1 gba-window p-4 rounded-md flex flex-col justify-between overflow-y-auto gba-scroll">
-          {activeTab === 'deploy' && focusedUnit && (
+          {(activeTab === 'deploy' || activeTab === 'inventory') && focusedUnit && (
             <div>
+              <div className="mb-4 p-3 bg-stone-950/60 border border-amber-700/40 rounded text-xs space-y-2">
+                <p className="text-amber-200">任务：{stage.objective}</p>
+                <p className="text-stone-300">演义主线：{stage.historicalNote}</p>
+                <p className="text-emerald-300">自主友军：{stage.allyUnits?.map((unit) => unit.name).join('、') || '本关无名将同行'}。玩家行动后，友军自行移动、攻击或救治。</p>
+                <p className="text-cyan-200">玄霄装备脉冲枪与急救包；终端能力每战6点能量，每次消耗2点与玄霄的行动。</p>
+              </div>
               <div className="flex items-center space-x-4 mb-4 border-b border-amber-500/30 pb-3">
                 <img
                   src={getPortraitDataUrl(focusedUnit.characterId, 'normal', focusedUnit.faction)}
@@ -269,6 +290,26 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {activeTab === 'recruit' && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-amber-300">战功授职 · 招揽部曲</h2>
+              <p className="text-sm text-stone-300">当前{militaryRank.name}，累计战功{merit}，直属部队{subordinateCount}/{militaryRank.capacity}。</p>
+              <p className="text-xs text-stone-400">{nextRank ? `再获${nextRank.merit - merit}战功升任${nextRank.name}，可统领${nextRank.capacity}支部队。` : '已达到最高军职，可统领五支部队。'}每关首次完成获得{stage.meritReward}战功，招兵消耗军资。</p>
+              {militaryRank.capacity === 0 && <p className="text-amber-200 text-sm">初来三国，尚无下属。完成首战获得100战功，升为伍长后即可招兵。</p>}
+              <div className="grid gap-3 sm:grid-cols-3">
+                {TROOP_TYPES.map((type) => (
+                  <div key={type.id} className="p-4 bg-stone-900 border border-stone-700 rounded space-y-3">
+                    <h3 className="font-bold text-amber-200">{type.name}</h3>
+                    <p className="text-xs text-stone-300">{type.description}</p>
+                    <button onClick={() => onRecruit(type.id)} disabled={subordinateCount >= militaryRank.capacity || gold < type.cost}
+                      className="gba-btn p-2 text-xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">{type.cost}金 · 招揽</button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-emerald-300">刘备、关羽等历史名将遵循自身军令与阵营，作为自主友军参战，不占直属编制。</p>
             </div>
           )}
 
@@ -348,39 +389,17 @@ export const PrepScreen: React.FC<PrepScreenProps> = ({
           )}
 
           {activeTab === 'support' && (
-            <div>
-              <h2 className="text-lg font-bold text-amber-300 mb-3 border-b border-amber-500/30 pb-1">
-                义结金兰 · 战将羁绊与支援
-              </h2>
-              <div className="space-y-3 text-xs">
-                <div className="p-3 bg-stone-900 rounded border border-amber-500/20 flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-amber-200 text-sm">刘备 & 关羽</span>
-                    <p className="text-stone-400 mt-0.5">桃园结义之契：同阵相邻时命中 +10，回避 +10，必杀 +5</p>
-                  </div>
-                  <span className="text-green-400 font-bold border border-green-500/40 px-2 py-0.5 rounded">
-                    支援等级 A
-                  </span>
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-amber-300">并肩作战 · 各循其志</h2>
+              <p className="text-sm text-stone-300">玩家只操作玄霄与直属部队。结束我军行动后，绿色友军按自身军令移动、攻击或救治，随后敌军行动。</p>
+              <p className="text-xs text-cyan-200">可用纳米急救支援名将，也可用直属部队阻敌、开路。名将在战斗中重伤会撤出本关，后续出场仍按演义时序安排。</p>
+              {stage.allyUnits?.map((unit) => (
+                <div key={unit.id} className="p-3 bg-stone-900 border border-emerald-800 rounded">
+                  <p className="font-bold text-emerald-300">{unit.name} · {unit.title}</p>
+                  <p className="text-xs text-stone-300">{unit.aiType === 'healer' ? '自主救治附近伤员' : '自主寻找敌军进攻'} · 与玄霄同阵营协作</p>
                 </div>
-                <div className="p-3 bg-stone-900 rounded border border-amber-500/20 flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-amber-200 text-sm">关羽 & 张飞</span>
-                    <p className="text-stone-400 mt-0.5">万夫莫当之势：同阵相邻时攻击 +2，必杀 +10</p>
-                  </div>
-                  <span className="text-green-400 font-bold border border-green-500/40 px-2 py-0.5 rounded">
-                    支援等级 A
-                  </span>
-                </div>
-                <div className="p-3 bg-stone-900 rounded border border-amber-500/20 flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-amber-200 text-sm">少主 & 诸葛亮</span>
-                    <p className="text-stone-400 mt-0.5">如鱼得水之谋：同阵相邻时魔防 +3，回避 +15</p>
-                  </div>
-                  <span className="text-amber-400 font-bold border border-amber-500/40 px-2 py-0.5 rounded">
-                    支援等级 B
-                  </span>
-                </div>
-              </div>
+              ))}
+              <p className="text-xs text-amber-200">{stage.historicalNote}</p>
             </div>
           )}
         </div>

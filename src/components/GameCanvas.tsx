@@ -11,6 +11,7 @@ import {
   Faction,
   Item,
   WeaponType,
+  VictoryCondition,
 } from '../types';
 import { getTerrainTileUrl, getUnitSpriteUrl, getPortraitDataUrl } from '../graphics/pixelAssets';
 import { getTerrainBonus } from '../data/classesData';
@@ -132,6 +133,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         ctx.lineWidth = 1;
         ctx.strokeRect(tx * TILE_SIZE + 1, ty * TILE_SIZE + 1, TILE_SIZE - 2, TILE_SIZE - 2);
       }
+    }
+
+    const objectiveTarget = stage.victoryCondition === VictoryCondition.Escape ? stage.escapeTarget
+      : stage.victoryCondition === VictoryCondition.Seize ? stage.seizeTarget : null;
+    if (objectiveTarget) {
+      const px = objectiveTarget.x * TILE_SIZE;
+      const py = objectiveTarget.y * TILE_SIZE;
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.4)';
+      ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+      ctx.strokeStyle = '#67e8f9';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(px + 2, py + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+      ctx.fillStyle = '#ecfeff';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(stage.victoryCondition === VictoryCondition.Escape ? '撤' : '占', px + 10, py + 21);
     }
 
     // 6. 绘制所有存活单位

@@ -26,17 +26,23 @@ export function computeAiTurn(
   terrainGrid: TerrainType[][],
   allUnits: Unit[]
 ): AiAction {
-  // 仅对存活的敌方单位决策
-  if (!enemyUnit.isAlive || enemyUnit.faction !== Faction.Enemy) {
+  // 友军与敌军共享决策，但始终以阵营关系选择目标。
+  if (!enemyUnit.isAlive || ![Faction.Enemy, Faction.Ally].includes(enemyUnit.faction)) {
     return { unit: enemyUnit, destination: { x: enemyUnit.x, y: enemyUnit.y }, actionType: 'wait' };
   }
 
   const aiType = enemyUnit.aiType || (enemyUnit.isBoss ? 'boss' : 'attack');
   const livingUnits = allUnits.filter((u) => u.isAlive);
-  const playerUnits = livingUnits.filter((u) => u.faction === Faction.Player || u.faction === Faction.Ally);
-  const enemyUnits = livingUnits.filter((u) => u.faction === Faction.Enemy);
+  const isEnemyTurn = enemyUnit.faction === Faction.Enemy;
+  const playerUnits = livingUnits.filter((u) => isEnemyTurn
+    ? u.faction === Faction.Player || u.faction === Faction.Ally
+    : u.faction === Faction.Enemy);
+  const enemyUnits = livingUnits.filter((u) => isEnemyTurn
+    ? u.faction === Faction.Enemy
+    : u.faction === Faction.Player || u.faction === Faction.Ally);
 
-  const weapon = enemyUnit.inventory[enemyUnit.equippedWeaponIndex] || null;
+  const equipped = enemyUnit.inventory[enemyUnit.equippedWeaponIndex];
+  const weapon = equipped?.uses > 0 ? equipped : null;
 
   // 1. 回复型 AI (有杖且友方有伤员)
   if (aiType === 'healer' && weapon?.type === WeaponType.Staff) {
@@ -52,6 +58,7 @@ export function computeAiTurn(
       let minDis = 999;
 
       for (const [, tile] of reachable) {
+        if (livingUnits.some((unit) => unit.id !== enemyUnit.id && unit.x === tile.x && unit.y === tile.y)) continue;
         const d = getDistance(tile.x, tile.y, target.x, target.y);
         if (d <= weapon.maxRange && d >= weapon.minRange) {
           return { unit: enemyUnit, destination: { x: tile.x, y: tile.y }, actionType: 'heal', targetUnit: target };

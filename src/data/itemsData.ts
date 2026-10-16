@@ -6,6 +6,18 @@
 import { Item, WeaponType, WeaponRank, UnitClass } from '../types';
 
 export const ITEMS_DATABASE: Record<string, Item> = {
+  pulse_carbine: {
+    id: 'pulse_carbine', name: '便携脉冲枪', type: WeaponType.Bow,
+    rank: WeaponRank.E, might: 7, hit: 95, crit: 0, weight: 3,
+    minRange: 1, maxRange: 2, uses: 30, maxUses: 30, cost: 0, icon: 'bow',
+    description: '玄霄的未来装备，射程1—2格。每战补充30发，无法在古代商铺制造。',
+  },
+  nano_medkit: {
+    id: 'nano_medkit', name: '纳米急救包', type: WeaponType.Item,
+    might: 0, hit: 100, crit: 0, weight: 0, minRange: 0, maxRange: 0,
+    uses: 3, maxUses: 3, cost: 0, icon: 'item', healAmount: 15,
+    description: '消耗一次行动回复自身15点生命。每战补充3次，不能复活阵亡者。',
+  },
   // --- 剑类 (Sword) ---
   iron_sword: {
     id: 'iron_sword',
@@ -562,6 +574,7 @@ export const ITEMS_DATABASE: Record<string, Item> = {
   // --- 消耗品 (Consumable) ---
   vulnerary: {
     id: 'vulnerary',
+    healAmount: 10,
     name: '金创伤药',
     type: WeaponType.Item,
     might: 0,
@@ -578,6 +591,7 @@ export const ITEMS_DATABASE: Record<string, Item> = {
   },
   elixir: {
     id: 'elixir',
+    healAmount: 999,
     name: '灵药圣水',
     type: WeaponType.Item,
     might: 0,

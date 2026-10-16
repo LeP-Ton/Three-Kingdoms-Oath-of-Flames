@@ -87,7 +87,7 @@ export function calculateMovementRange(
       const occupyingUnit = unitMap.get(neighborKey);
 
       // 敌方单位阻挡行进路线 (ZOC 阻滞)
-      if (occupyingUnit && occupyingUnit.faction !== unit.faction) {
+      if (occupyingUnit && (occupyingUnit.faction === Faction.Enemy) !== (unit.faction === Faction.Enemy)) {
         continue;
       }
 

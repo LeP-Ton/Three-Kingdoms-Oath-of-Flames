@@ -188,6 +188,9 @@ export interface StageConfig {
   title: string;
   subtitle: string;
   description: string;
+  historicalNote: string; // 本关必须保留的演义事件与结果
+  objective: string;
+  meritReward: number;
   mapWidth: number;
   mapHeight: number;
   terrainGrid: TerrainType[][];
